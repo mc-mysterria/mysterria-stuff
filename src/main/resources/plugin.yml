@@ -1,0 +1,10 @@
+name: MysterriaStuff
+version: '1.0.0'
+main: net.mysterria.stuff.MysterriaStuff
+api-version: '1.21'
+authors: [ ikeepcalm ]
+commands:
+  mysterriastuff:
+    aliases: [ mystuff ]
+    description: Main command for MysterriaStuff plugin
+    usage: /<command> <subcommand>
