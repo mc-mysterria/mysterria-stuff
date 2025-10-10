@@ -1,46 +1,97 @@
 package net.mysterria.stuff;
 
-import net.mysterria.stuff.battlepass.ElytraBlocker;
-import net.mysterria.stuff.battlepass.ElytraCommand;
-import net.mysterria.stuff.fixes.HuskTownsLightning;
-import org.bukkit.command.ConsoleCommandSender;
+import net.mysterria.stuff.features.battlepass.NetheriteElytraBlocker;
+import net.mysterria.stuff.commands.MainCommand;
+import net.mysterria.stuff.commands.MainCommandTabCompleter;
+import net.mysterria.stuff.features.coi.DangerousActionsListener;
+import net.mysterria.stuff.config.ConfigManager;
+import net.mysterria.stuff.features.husktowns.LightningStrikeFix;
+import net.mysterria.stuff.features.recipes.RecipeManager;
+import net.mysterria.stuff.utils.PrettyLogger;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class MysterriaStuff extends JavaPlugin {
 
     private static MysterriaStuff instance;
+    private ConfigManager configManager;
+    private RecipeManager recipeManager;
 
     @Override
     public void onEnable() {
         instance = this;
 
-        log("MysterriaStuff enabled!");
-        log("Available thingies:");
-        log(" - Reinforced Elytra Blocker");
-        log("More to come soon...");
+        // Load configuration first
+        configManager = new ConfigManager(this);
 
-        if (getServer().getPluginCommand("mysterriastuff") != null) {
-            getServer().getPluginCommand("mysterriastuff").setExecutor(new ElytraCommand());
+        // Set debug mode from config
+        PrettyLogger.setDebugMode(configManager.isDebugMode());
+
+        // Header with beautiful formatting
+        if (configManager.isShowHeader()) {
+            PrettyLogger.header("MysterriaStuff Initializing");
         }
 
-        getServer().getPluginManager().registerEvents(new ElytraBlocker(), this);
-        getServer().getPluginManager().registerEvents(new HuskTownsLightning(), this);
+        PrettyLogger.info("Starting MysterriaStuff v1.0.0");
+        PrettyLogger.debug("Debug mode: " + (PrettyLogger.isDebugMode() ? "enabled" : "disabled"));
+        PrettyLogger.debug("Config version: " + configManager.getConfigVersion());
+
+        // Register command
+        if (getServer().getPluginCommand("mysterriastuff") != null) {
+            getServer().getPluginCommand("mysterriastuff").setExecutor(new MainCommand());
+            getServer().getPluginCommand("mysterriastuff").setTabCompleter(new MainCommandTabCompleter());
+            PrettyLogger.debug("Registered main command with tab completion");
+        }
+
+        // Register event listeners based on config
+        PrettyLogger.info("Registering event listeners...");
+
+        if (configManager.isElytraBlockerEnabled()) {
+            getServer().getPluginManager().registerEvents(new NetheriteElytraBlocker(), this);
+            PrettyLogger.feature("Reinforced Elytra Blocker");
+        }
+
+        if (configManager.isLightningFixEnabled()) {
+            getServer().getPluginManager().registerEvents(new LightningStrikeFix(), this);
+            PrettyLogger.feature("Lightning Strike Fix (HuskTowns)");
+        }
+
+        if (configManager.isCoiProtectionEnabled()) {
+            getServer().getPluginManager().registerEvents(new DangerousActionsListener(), this);
+            PrettyLogger.feature("CoI Dangerous Actions Listener");
+        }
+
+        // Initialize recipe manager
+        if (configManager.isRecipeManagerEnabled()) {
+            PrettyLogger.info("Initializing recipe manager...");
+            recipeManager = new RecipeManager();
+            recipeManager.initialize();
+            PrettyLogger.feature("Runtime Recipe Manager");
+        }
+
+        PrettyLogger.success("MysterriaStuff enabled successfully!");
+        PrettyLogger.info("Use /mystuff help for available commands");
+
+        if (configManager.isShowHeader()) {
+            PrettyLogger.header("Initialization Complete");
+        }
     }
 
     @Override
     public void onDisable() {
-        // Plugin shutdown logic
+        PrettyLogger.warn("MysterriaStuff is shutting down...");
+        PrettyLogger.info("Thanks for using MysterriaStuff!");
     }
 
     public static MysterriaStuff getInstance() {
         return instance;
     }
 
-    public void log(String message) {
-        ConsoleCommandSender console = getServer().getConsoleSender();
-        var gradientPrefix = net.kyori.adventure.text.Component.text("[Stuff]", net.kyori.adventure.text.format.TextColor.color(0xFABCDE));
-        var whiteText = net.kyori.adventure.text.Component.text(message, net.kyori.adventure.text.format.NamedTextColor.WHITE);
-        console.sendMessage(gradientPrefix.append(net.kyori.adventure.text.Component.space()).append(whiteText));
+    public RecipeManager getRecipeManager() {
+        return recipeManager;
+    }
+
+    public ConfigManager getConfigManager() {
+        return configManager;
     }
 
 }

@@ -3,8 +3,47 @@ version: '1.0.0'
 main: net.mysterria.stuff.MysterriaStuff
 api-version: '1.21'
 authors: [ ikeepcalm ]
+description: Enhanced Minecraft plugin with utilities, fixes, and runtime features
+
 commands:
   mysterriastuff:
     aliases: [ mystuff ]
     description: Main command for MysterriaStuff plugin
     usage: /<command> <subcommand>
+    permission: mysterriastuff.use
+
+permissions:
+  mysterriastuff.*:
+    description: Grants all MysterriaStuff permissions
+    default: op
+    children:
+      mysterriastuff.use: true
+      mysterriastuff.reload: true
+      mysterriastuff.debug: true
+      mysterriastuff.give: true
+      mysterriastuff.export: true
+      mysterriastuff.recipe: true
+
+  mysterriastuff.use:
+    description: Allows using basic MysterriaStuff commands
+    default: true
+
+  mysterriastuff.reload:
+    description: Allows reloading the plugin
+    default: op
+
+  mysterriastuff.debug:
+    description: Allows toggling debug mode
+    default: op
+
+  mysterriastuff.give:
+    description: Allows giving items to players
+    default: op
+
+  mysterriastuff.export:
+    description: Allows exporting items as bytes
+    default: op
+
+  mysterriastuff.recipe:
+    description: Allows managing custom recipes
+    default: op

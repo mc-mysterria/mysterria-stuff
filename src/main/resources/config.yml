@@ -1,0 +1,105 @@
+# MysterriaStuff Configuration File
+#
+# This plugin provides various utilities and fixes for the Mysterria server
+#
+# For help, use /mystuff help in-game
+
+# ═══════════════════════════════════════════════════════════════
+# General Settings
+# ═══════════════════════════════════════════════════════════════
+
+# Enable debug mode to see detailed messages in console
+debug-mode: false
+
+# Plugin prefix color (hex color code)
+# Default: #AA55FF (purple)
+prefix-color: "#AA55FF"
+
+# ═══════════════════════════════════════════════════════════════
+# Feature Toggles
+# ═══════════════════════════════════════════════════════════════
+
+features:
+  # Reinforced Elytra protection system
+  elytra-blocker: true
+
+  # Lightning strike fix for HuskTowns compatibility
+  lightning-fix: true
+
+  # CircleOfImagination dangerous actions listener
+  # Prevents duplication and unauthorized use of mystical items
+  coi-protection: true
+
+  # Runtime recipe manager
+  # Allows creating custom recipes without server restart
+  recipe-manager: true
+
+# ═══════════════════════════════════════════════════════════════
+# CircleOfImagination Protection Settings
+# ═══════════════════════════════════════════════════════════════
+
+coi-protection:
+  # Reset player attributes on join
+  reset-attributes-on-join: true
+
+  # Restrict spectator movement through blocks (except ops)
+  restrict-spectator-noclip: true
+
+  # Prevent item pickup in nightmare worlds
+  block-nightmare-pickups: true
+
+  # Keep inventory on death in nightmare worlds
+  nightmare-keep-inventory: true
+
+# ═══════════════════════════════════════════════════════════════
+# Recipe Manager Settings
+# ═══════════════════════════════════════════════════════════════
+
+recipes:
+  # Enable runtime recipe system
+  enabled: true
+
+  # Maximum number of custom recipes allowed
+  max-recipes: 100
+
+  # Log recipe additions/removals
+  log-changes: true
+
+# ═══════════════════════════════════════════════════════════════
+# Logging Settings
+# ═══════════════════════════════════════════════════════════════
+
+logging:
+  # Use colored/gradient console output
+  use-colors: true
+
+  # Show startup header
+  show-header: true
+
+  # Log levels: INFO, WARN, ERROR, DEBUG, SUCCESS
+  # Messages below this level won't be shown (unless debug-mode is true)
+  min-level: INFO
+
+  # Log command usage
+  log-commands: true
+
+  # Log feature loading
+  log-features: true
+
+# ═══════════════════════════════════════════════════════════════
+# Performance Settings
+# ═══════════════════════════════════════════════════════════════
+
+performance:
+  # Enable async processing where possible
+  async-processing: true
+
+  # Cache frequently used data
+  enable-caching: true
+
+# ═══════════════════════════════════════════════════════════════
+# DO NOT MODIFY BELOW THIS LINE
+# ═══════════════════════════════════════════════════════════════
+
+# Configuration version - used for automatic migration
+config-version: 1

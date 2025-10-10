@@ -1,4 +1,4 @@
-package net.mysterria.stuff.battlepass;
+package net.mysterria.stuff.features.battlepass;
 
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -10,7 +10,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 
-public class ElytraBlocker implements Listener {
+public class NetheriteElytraBlocker implements Listener {
 
     @EventHandler
     public void onItemEnchantment(PrepareItemEnchantEvent event) {
