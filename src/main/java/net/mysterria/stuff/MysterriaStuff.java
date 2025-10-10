@@ -2,6 +2,7 @@ package net.mysterria.stuff;
 
 import net.mysterria.stuff.battlepass.ElytraBlocker;
 import net.mysterria.stuff.battlepass.ElytraCommand;
+import net.mysterria.stuff.fixes.HuskTownsLightning;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -23,6 +24,7 @@ public final class MysterriaStuff extends JavaPlugin {
         }
 
         getServer().getPluginManager().registerEvents(new ElytraBlocker(), this);
+        getServer().getPluginManager().registerEvents(new HuskTownsLightning(), this);
     }
 
     @Override
