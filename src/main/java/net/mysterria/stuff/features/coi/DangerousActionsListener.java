@@ -144,15 +144,21 @@ public class DangerousActionsListener implements Listener {
         if (item.getType() == Material.AIR) return;
         if (item.hasItemMeta()) {
             PersistentDataContainer container = item.getItemMeta().getPersistentDataContainer();
-            if (container.has(AdventureUtil.getCoINamespacedKey("abilitycost")) || container.has(AdventureUtil.getCoINamespacedKey("shortcut"))) {
+            NamespacedKey abilityCostKey = AdventureUtil.getCoINamespacedKey("abilityCost");
+            NamespacedKey shortcutKey = AdventureUtil.getCoINamespacedKey("shortcut");
+            if (abilityCostKey != null && shortcutKey != null) {
+                if (container.has(abilityCostKey) || container.has(shortcutKey)) {
+                    event.setCancelled(true);
+                }
+            }
+
+            NamespacedKey pathwayKey = AdventureUtil.getCoINamespacedKey("pathway");
+            if (pathwayKey != null && container.has(pathwayKey)) {
                 event.setCancelled(true);
             }
 
-            if (container.has(AdventureUtil.getCoINamespacedKey("pathway"))) {
-                event.setCancelled(true);
-            }
-
-            if (container.has(AdventureUtil.getCoINamespacedKey("ingredient"))) {
+            NamespacedKey ingredientKey = AdventureUtil.getCoINamespacedKey("ingredient");
+            if (ingredientKey != null && container.has(ingredientKey)) {
                 event.setCancelled(true);
             }
 
@@ -172,12 +178,20 @@ public class DangerousActionsListener implements Listener {
 
         PersistentDataContainer container = item.getItemMeta().getPersistentDataContainer();
 
-        if (container.has(AdventureUtil.getCoINamespacedKey("abilitycost")) || container.has(AdventureUtil.getCoINamespacedKey("shortcut")) || container.has(AdventureUtil.getCoINamespacedKey("fogOfHistory"))) {
-            InventoryView view = event.getView();
-            if (view.getType() != InventoryType.CRAFTING) {
-                event.setCancelled(true);
+        NamespacedKey abilityCostKey = AdventureUtil.getCoINamespacedKey("abilityCost");
+        NamespacedKey shortcutKey = AdventureUtil.getCoINamespacedKey("shortcut");
+        NamespacedKey fogOfHistoryKey = AdventureUtil.getCoINamespacedKey("fogOfHistory");
+        if (abilityCostKey != null && shortcutKey != null && fogOfHistoryKey != null) {
+            if (container.has(abilityCostKey) || container.has(shortcutKey) || container.has(fogOfHistoryKey)) {
+                InventoryView view = event.getView();
+                if (view.getType() != InventoryType.CRAFTING) {
+                    event.setCancelled(true);
+                }
             }
-        } else if (container.has(AdventureUtil.getCoINamespacedKey("pathway"))) {
+        }
+
+        NamespacedKey pathwayKey = AdventureUtil.getCoINamespacedKey("pathway");
+        if (pathwayKey != null && container.has(pathwayKey)) {
             InventoryView view = event.getView();
             event.setCancelled(!(view.getType() == InventoryType.CRAFTING || view.getType() == InventoryType.CHEST || view.getType() == InventoryType.ENDER_CHEST || view.getType() == InventoryType.SHULKER_BOX || view.getType() == InventoryType.BARREL));
         }
@@ -190,9 +204,13 @@ public class DangerousActionsListener implements Listener {
         if (item.getType() == Material.AIR) return;
         if (event.getWhoClicked() instanceof Player player) {
             PersistentDataContainer container = item.getItemMeta().getPersistentDataContainer();
-            if (container.has(AdventureUtil.getCoINamespacedKey("abilitycost")) || container.has(AdventureUtil.getCoINamespacedKey("shortcut"))) {
-                if (item.getAmount() > 1) {
-                    item.setAmount(1);
+            NamespacedKey abilityCostKey = AdventureUtil.getCoINamespacedKey("abilityCost");
+            NamespacedKey shortcutKey = AdventureUtil.getCoINamespacedKey("shortcut");
+            if (abilityCostKey != null && shortcutKey != null) {
+                if (container.has(abilityCostKey) || container.has(shortcutKey)) {
+                    if (item.getAmount() > 1) {
+                        item.setAmount(1);
+                    }
                 }
             }
         }
@@ -208,16 +226,19 @@ public class DangerousActionsListener implements Listener {
 
             if (item.getType() == Material.PLAYER_HEAD) {
                 PersistentDataContainer container = item.getItemMeta().getPersistentDataContainer();
-                if (container.has(AdventureUtil.getCoINamespacedKey("pathway"))) {
+                NamespacedKey pathwayKey = AdventureUtil.getCoINamespacedKey("pathway");
+                if (pathwayKey != null && container.has(pathwayKey)) {
                     event.setCancelled(true);
                 }
             } else {
                 PersistentDataContainer container = item.getItemMeta().getPersistentDataContainer();
-                if (container.has(AdventureUtil.getCoINamespacedKey("ingredient"))) {
+                NamespacedKey ingredientKey = AdventureUtil.getCoINamespacedKey("ingredient");
+                if (ingredientKey != null && container.has(ingredientKey)) {
                     event.setCancelled(true);
                 }
 
-                if (container.has(AdventureUtil.getCoINamespacedKey("worm-of-spirit"))) {
+                NamespacedKey wormOfSpiritKey = AdventureUtil.getCoINamespacedKey("worm-of-spirit");
+                if (wormOfSpiritKey != null && container.has(wormOfSpiritKey)) {
                     event.setCancelled(true);
                 }
             }
@@ -269,12 +290,18 @@ public class DangerousActionsListener implements Listener {
             if (ingredient == null) continue;
             if (ingredient.getType() == Material.AIR) continue;
             PersistentDataContainer container = ingredient.getItemMeta().getPersistentDataContainer();
-            if (container.has(AdventureUtil.getCoINamespacedKey("abilitycost")) || container.has(AdventureUtil.getCoINamespacedKey("shortcut"))) {
-                event.getInventory().setResult(new ItemStack(Material.AIR));
+
+            NamespacedKey abilityCostKey = AdventureUtil.getCoINamespacedKey("abilityCost");
+            NamespacedKey shortcutKey = AdventureUtil.getCoINamespacedKey("shortcut");
+            if (abilityCostKey != null && shortcutKey != null) {
+                if (container.has(abilityCostKey) || container.has(shortcutKey)) {
+                    event.getInventory().setResult(new ItemStack(Material.AIR));
+                }
             }
 
             if (ingredient.getType() != Material.WRITTEN_BOOK) {
-                if (container.has(AdventureUtil.getCoINamespacedKey("pathway"))) {
+                NamespacedKey pathwayKey = AdventureUtil.getCoINamespacedKey("pathway");
+                if (pathwayKey != null && container.has(pathwayKey)) {
                     event.getInventory().setResult(new ItemStack(Material.AIR));
                 }
             } else {
@@ -283,7 +310,8 @@ public class DangerousActionsListener implements Listener {
                 }
             }
 
-            if (container.has(AdventureUtil.getCoINamespacedKey("ingredient"))) {
+            NamespacedKey ingredientKey = AdventureUtil.getCoINamespacedKey("ingredient");
+            if (ingredientKey != null && container.has(ingredientKey)) {
                 event.getInventory().setResult(new ItemStack(Material.AIR));
             }
         }
@@ -308,7 +336,8 @@ public class DangerousActionsListener implements Listener {
             ItemStack item = event.getItem();
             if (item != null && item.getType() == Material.ENDER_PEARL) {
                 PersistentDataContainer container = item.getItemMeta().getPersistentDataContainer();
-                if (container.has(AdventureUtil.getCoINamespacedKey("ingredient"))) {
+                NamespacedKey ingredientKey = AdventureUtil.getCoINamespacedKey("ingredient");
+                if (ingredientKey != null && container.has(ingredientKey)) {
                     event.setCancelled(true);
                 }
             }
@@ -318,7 +347,12 @@ public class DangerousActionsListener implements Listener {
     private boolean checkForNonIngredientMysticalAlignment(ItemStack item) {
         if (item.getType() != Material.AIR) {
             PersistentDataContainer container = item.getItemMeta().getPersistentDataContainer();
-            return container.has(AdventureUtil.getCoINamespacedKey("abilitycost")) || container.has(AdventureUtil.getCoINamespacedKey("shortcut")) || container.has(AdventureUtil.getCoINamespacedKey("fogOfHistory"));
+            NamespacedKey abilityCostKey = AdventureUtil.getCoINamespacedKey("abilityCost");
+            NamespacedKey shortcutKey = AdventureUtil.getCoINamespacedKey("shortcut");
+            NamespacedKey fogOfHistoryKey = AdventureUtil.getCoINamespacedKey("fogOfHistory");
+            if (abilityCostKey != null && shortcutKey != null && fogOfHistoryKey != null) {
+                return container.has(abilityCostKey) || container.has(shortcutKey) || container.has(fogOfHistoryKey);
+            }
         }
         return false;
     }
@@ -339,7 +373,14 @@ public class DangerousActionsListener implements Listener {
     private boolean checkForMysticalAlignment(ItemStack item) {
         if (item.getType() != Material.AIR) {
             PersistentDataContainer container = item.getItemMeta().getPersistentDataContainer();
-            return container.has(AdventureUtil.getCoINamespacedKey("abilitycost")) || container.has(AdventureUtil.getCoINamespacedKey("shortcut")) || container.has(AdventureUtil.getCoINamespacedKey("fogOfHistory")) || container.has(AdventureUtil.getCoINamespacedKey("pathway")) || container.has(AdventureUtil.getCoINamespacedKey("ingredient"));
+            NamespacedKey abilityCostKey = AdventureUtil.getCoINamespacedKey("abilityCost");
+            NamespacedKey shortcutKey = AdventureUtil.getCoINamespacedKey("shortcut");
+            NamespacedKey fogOfHistoryKey = AdventureUtil.getCoINamespacedKey("fogOfHistory");
+            NamespacedKey pathwayKey = AdventureUtil.getCoINamespacedKey("pathway");
+            NamespacedKey ingredientKey = AdventureUtil.getCoINamespacedKey("ingredient");
+            if (abilityCostKey != null && shortcutKey != null && fogOfHistoryKey != null && pathwayKey != null && ingredientKey != null) {
+                return container.has(abilityCostKey) || container.has(shortcutKey) || container.has(fogOfHistoryKey) || container.has(pathwayKey) || container.has(ingredientKey);
+            }
         }
         return false;
     }

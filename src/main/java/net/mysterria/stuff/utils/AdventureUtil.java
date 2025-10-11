@@ -5,7 +5,9 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.mysterria.stuff.MysterriaStuff;
+import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
+import org.bukkit.plugin.java.JavaPlugin;
 
 public class AdventureUtil {
 
@@ -15,11 +17,15 @@ public class AdventureUtil {
 
     /**
      * Gets a NamespacedKey for CircleOfImagination plugin
-     * @param key The key identifier
-     * @return NamespacedKey with CircleOfImagination namespace
+     * @param key The key identifier (can be camelCase)
+     * @return NamespacedKey with CircleOfImagination namespace, or null if plugin not found
      */
     public static NamespacedKey getCoINamespacedKey(String key) {
-        return new NamespacedKey("circleofimagination", key);
+        JavaPlugin plugin = (JavaPlugin) Bukkit.getPluginManager().getPlugin("CircleOfImagination");
+        if (plugin != null) {
+            return new NamespacedKey(plugin, key);
+        }
+        return null;
     }
 
     /**
