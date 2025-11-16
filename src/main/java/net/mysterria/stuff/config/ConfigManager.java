@@ -85,6 +85,10 @@ public class ConfigManager {
         return config.getBoolean("features.recipe-manager", true);
     }
 
+    public boolean isUniversalTokenEnabled() {
+        return config.getBoolean("features.universal-token", true);
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // CoI Protection Settings
     // ═══════════════════════════════════════════════════════════════
@@ -119,6 +123,34 @@ public class ConfigManager {
 
     public boolean isLogRecipeChanges() {
         return config.getBoolean("recipes.log-changes", true);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Universal Token Settings
+    // ═══════════════════════════════════════════════════════════════
+
+    public String getTokenItemName() {
+        return config.getString("universal-token.item-name", "&6&lUniversal Wrap Token");
+    }
+
+    public java.util.List<String> getTokenItemLore() {
+        return config.getStringList("universal-token.item-lore");
+    }
+
+    public String getGuiMainTitle() {
+        return config.getString("universal-token.gui-main-title", "&6Universal Token - Categories");
+    }
+
+    public String getGuiCategoryTitle() {
+        return config.getString("universal-token.gui-category-title", "&6{category} Wraps");
+    }
+
+    public String getGuiConfirmTitle() {
+        return config.getString("universal-token.gui-confirm-title", "&cConfirm Exchange?");
+    }
+
+    public String getTokenMessage(String key) {
+        return config.getString("universal-token.messages." + key, "");
     }
 
     // ═══════════════════════════════════════════════════════════════

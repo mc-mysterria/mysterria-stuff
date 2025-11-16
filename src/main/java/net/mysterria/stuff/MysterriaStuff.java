@@ -1,13 +1,20 @@
 package net.mysterria.stuff;
 
-import net.mysterria.stuff.features.battlepass.NetheriteElytraBlocker;
+import de.skyslycer.hmcwraps.HMCWraps;
 import net.mysterria.stuff.commands.MainCommand;
 import net.mysterria.stuff.commands.MainCommandTabCompleter;
-import net.mysterria.stuff.features.coi.DangerousActionsListener;
 import net.mysterria.stuff.config.ConfigManager;
+import net.mysterria.stuff.features.battlepass.NetheriteElytraBlocker;
+import net.mysterria.stuff.features.coi.DangerousActionsListener;
+import net.mysterria.stuff.features.coi.LeoderoStrikeListener;
+import net.mysterria.stuff.features.hmcwraps.listener.UniversalTokenListener;
+import net.mysterria.stuff.features.hmcwraps.UniversalTokenManager;
+import net.mysterria.stuff.features.hmcwraps.listener.WrapPreviewListener;
 import net.mysterria.stuff.features.husktowns.LightningStrikeFix;
 import net.mysterria.stuff.features.recipes.RecipeManager;
 import net.mysterria.stuff.utils.PrettyLogger;
+import org.bukkit.Bukkit;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class MysterriaStuff extends JavaPlugin {
@@ -15,6 +22,10 @@ public final class MysterriaStuff extends JavaPlugin {
     private static MysterriaStuff instance;
     private ConfigManager configManager;
     private RecipeManager recipeManager;
+
+    public static MysterriaStuff getInstance() {
+        return instance;
+    }
 
     @Override
     public void onEnable() {
@@ -57,7 +68,25 @@ public final class MysterriaStuff extends JavaPlugin {
 
         if (configManager.isCoiProtectionEnabled()) {
             getServer().getPluginManager().registerEvents(new DangerousActionsListener(), this);
+            getServer().getPluginManager().registerEvents(new LeoderoStrikeListener(this), this);
             PrettyLogger.feature("CoI Dangerous Actions Listener");
+        }
+
+        // Initialize Universal Token system
+        if (configManager.isUniversalTokenEnabled()) {
+            HMCWraps hmcWraps = loadHmcWraps();
+            if (hmcWraps != null) {
+                PrettyLogger.info("Initializing Universal Token system...");
+                UniversalTokenManager.initialize(this);
+
+                WrapPreviewListener previewHandler = new WrapPreviewListener(hmcWraps);
+                getServer().getPluginManager().registerEvents(previewHandler, this);
+                getServer().getPluginManager().registerEvents(new UniversalTokenListener(this, hmcWraps, previewHandler), this);
+
+                PrettyLogger.feature("Universal Token (HMCWraps Integration)");
+            } else {
+                PrettyLogger.warn("Universal Token enabled but HMCWraps plugin not found!");
+            }
         }
 
         // Initialize recipe manager
@@ -76,14 +105,35 @@ public final class MysterriaStuff extends JavaPlugin {
         }
     }
 
+    private HMCWraps loadHmcWraps() {
+        String name = "HMCWraps";
+        try {
+            boolean enabled = Bukkit.getPluginManager().isPluginEnabled(name);
+            PrettyLogger.debug(name + " enabled: " + enabled);
+            Plugin plugin = Bukkit.getPluginManager().getPlugin(name);
+            if (plugin == null) {
+                PrettyLogger.warn(name + " plugin not found (getPlugin returned null).");
+                return null;
+            }
+            PrettyLogger.debug(name + " plugin instance class: " + plugin.getClass().getName());
+            if (!(plugin instanceof HMCWraps)) {
+                PrettyLogger.warn(name + " found but is not an instance of HMCWraps. Actual: " + plugin.getClass().getName());
+                return null;
+            }
+            return (HMCWraps) plugin;
+        } catch (ClassCastException e) {
+            PrettyLogger.warn("Failed to cast " + name + " plugin to HMCWraps: " + e.toString());
+            return null;
+        } catch (Throwable t) {
+            PrettyLogger.warn("Unexpected error while loading " + name + ": " + t.toString());
+            return null;
+        }
+    }
+
     @Override
     public void onDisable() {
         PrettyLogger.warn("MysterriaStuff is shutting down...");
         PrettyLogger.info("Thanks for using MysterriaStuff!");
-    }
-
-    public static MysterriaStuff getInstance() {
-        return instance;
     }
 
     public RecipeManager getRecipeManager() {

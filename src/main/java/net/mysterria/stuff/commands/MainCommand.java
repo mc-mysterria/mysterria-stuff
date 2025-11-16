@@ -6,6 +6,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.mysterria.stuff.MysterriaStuff;
+import net.mysterria.stuff.features.hmcwraps.UniversalTokenManager;
 import net.mysterria.stuff.utils.PrettyLogger;
 import net.mysterria.stuff.utils.StaticItems;
 import org.bukkit.Bukkit;
@@ -54,6 +55,9 @@ public class MainCommand implements CommandExecutor {
             case "recipe" -> {
                 return handleRecipe(sender, args);
             }
+            case "token" -> {
+                return handleToken(sender, args);
+            }
             default -> {
                 sender.sendMessage(Component.text("Unknown subcommand. Use /mystuff help for available commands.")
                         .color(NamedTextColor.RED));
@@ -80,6 +84,7 @@ public class MainCommand implements CommandExecutor {
         sendCommandHelp(sender, "/mystuff give <item> <player>", "Give an item to a player");
         sendCommandHelp(sender, "/mystuff export", "Export held item as bytes");
         sendCommandHelp(sender, "/mystuff recipe <list|reload>", "Manage custom recipes");
+        sendCommandHelp(sender, "/mystuff token give <player> [amount]", "Give universal tokens");
 
         sender.sendMessage(Component.empty());
         sender.sendMessage(header);
@@ -351,6 +356,92 @@ public class MainCommand implements CommandExecutor {
                 return true;
             }
         }
+    }
+
+    private boolean handleToken(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("mysterriastuff.token")) {
+            sender.sendMessage(Component.text("You don't have permission to use this command!")
+                    .color(NamedTextColor.RED));
+            return true;
+        }
+
+        if (args.length < 2) {
+            sender.sendMessage(Component.text("Usage: /mystuff token give <player> [amount]")
+                    .color(NamedTextColor.RED));
+            return true;
+        }
+
+        if (args[1].equalsIgnoreCase("give")) {
+            if (!sender.hasPermission("mysterriastuff.token.give")) {
+                sender.sendMessage(Component.text("You don't have permission to give tokens!")
+                        .color(NamedTextColor.RED));
+                return true;
+            }
+
+            if (args.length < 3) {
+                sender.sendMessage(Component.text("Usage: /mystuff token give <player> [amount]")
+                        .color(NamedTextColor.RED));
+                return true;
+            }
+
+            String playerName = args[2];
+            int amount = 1;
+
+            if (args.length >= 4) {
+                try {
+                    amount = Integer.parseInt(args[3]);
+                    if (amount < 1 || amount > 64) {
+                        sender.sendMessage(Component.text("Amount must be between 1 and 64!")
+                                .color(NamedTextColor.RED));
+                        return true;
+                    }
+                } catch (NumberFormatException e) {
+                    sender.sendMessage(Component.text("Invalid amount! Must be a number.")
+                            .color(NamedTextColor.RED));
+                    return true;
+                }
+            }
+
+            Player target = Bukkit.getPlayer(playerName);
+            if (target == null || !target.isOnline()) {
+                sender.sendMessage(Component.text("Player not found or is offline!")
+                        .color(NamedTextColor.RED));
+                return true;
+            }
+
+            // Get UniversalTokenManager instance
+            UniversalTokenManager tokenManager = UniversalTokenManager.getInstance();
+            if (tokenManager == null) {
+                sender.sendMessage(Component.text("Universal Token system is not enabled!")
+                        .color(NamedTextColor.RED));
+                return true;
+            }
+
+            // Create and give token
+            ItemStack token = tokenManager.createToken(amount);
+
+            if (target.getInventory().firstEmpty() != -1) {
+                target.getInventory().addItem(token);
+            } else {
+                target.getWorld().dropItemNaturally(target.getLocation(), token);
+            }
+
+            // Send messages
+            target.sendMessage(tokenManager.getMessage("token-received", "amount", String.valueOf(amount)));
+
+            sender.sendMessage(Component.text("Given ")
+                    .color(NamedTextColor.GREEN)
+                    .append(Component.text(playerName).color(NamedTextColor.AQUA))
+                    .append(Component.text(" " + amount + " Universal Token(s)!").color(NamedTextColor.GREEN)));
+
+            PrettyLogger.info("Gave " + playerName + " " + amount + " Universal Token(s) (by " + sender.getName() + ")");
+            return true;
+        }
+        sender.sendMessage(Component.text("Unknown token subcommand!")
+                .color(NamedTextColor.RED));
+        sender.sendMessage(Component.text("Available: give")
+                .color(NamedTextColor.GRAY));
+        return true;
     }
 
     private ItemStack getElytra() {

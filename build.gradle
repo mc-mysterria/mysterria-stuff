@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id("xyz.jpenilla.run-paper") version "2.3.1"
+    id("com.gradleup.shadow") version "8.3.3"
 }
 
 group = 'net.mysterria.stuff'
@@ -9,13 +10,27 @@ version = '1.0.0'
 repositories {
     mavenCentral()
     maven {
+        url = "https://repo.hibiscusmc.com/releases/"
+    }
+    maven {
+        url = "https://repo.triumphteam.dev/snapshots"
+    }
+    maven {
         name = "papermc-repo"
         url = "https://repo.papermc.io/repository/maven-public/"
     }
 }
 
+tasks.build.dependsOn(shadowJar)
+
 dependencies {
+    implementation("dev.triumphteam:triumph-gui-paper:3.1.13")
+    compileOnly("de.skyslycer.hmcwraps:api:1.7.0")
     compileOnly("io.papermc.paper:paper-api:1.21.8-R0.1-SNAPSHOT")
+}
+
+shadowJar {
+    relocate("dev.triumphteam.gui", "net.mysterria.gui")
 }
 
 tasks {

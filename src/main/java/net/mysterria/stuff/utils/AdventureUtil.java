@@ -3,6 +3,7 @@ package net.mysterria.stuff.utils;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.mysterria.stuff.MysterriaStuff;
 import org.bukkit.Bukkit;
@@ -26,6 +27,22 @@ public class AdventureUtil {
             return new NamespacedKey(plugin, key);
         }
         return null;
+    }
+
+    /**
+     * Convert MiniMessage format to legacy ampersand format
+     * @param miniMessage The MiniMessage formatted string (e.g., "<light_purple>Text <gray>More")
+     * @return Legacy formatted string (e.g., "&dText &7More")
+     */
+    public static String convertMiniMessageToLegacy(String miniMessage) {
+        if (miniMessage == null || miniMessage.isEmpty()) {
+            return miniMessage;
+        }
+
+        MiniMessage mm = MiniMessage.miniMessage();
+        Component component = mm.deserialize(miniMessage);
+
+        return LegacyComponentSerializer.legacyAmpersand().serialize(component);
     }
 
     /**

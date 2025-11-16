@@ -4,6 +4,7 @@ main: net.mysterria.stuff.MysterriaStuff
 api-version: '1.21'
 authors: [ ikeepcalm ]
 description: Enhanced Minecraft plugin with utilities, fixes, and runtime features
+soft-depend: [ HMCWraps ]
 
 commands:
   mysterriastuff:
@@ -23,6 +24,9 @@ permissions:
       mysterriastuff.give: true
       mysterriastuff.export: true
       mysterriastuff.recipe: true
+      mysterriastuff.token: true
+      mysterriastuff.token.give: true
+      mysterriastuff.token.use: true
 
   mysterriastuff.use:
     description: Allows using basic MysterriaStuff commands
@@ -47,3 +51,15 @@ permissions:
   mysterriastuff.recipe:
     description: Allows managing custom recipes
     default: op
+
+  mysterriastuff.token:
+    description: Allows using universal token commands
+    default: op
+
+  mysterriastuff.token.give:
+    description: Allows giving universal tokens to players
+    default: op
+
+  mysterriastuff.token.use:
+    description: Allows using universal tokens
+    default: true

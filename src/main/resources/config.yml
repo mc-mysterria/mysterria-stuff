@@ -34,6 +34,10 @@ features:
   # Allows creating custom recipes without server restart
   recipe-manager: true
 
+  # Universal Token for HMCWraps integration
+  # Allows players to exchange tokens for any available wrap
+  universal-token: true
+
 # ═══════════════════════════════════════════════════════════════
 # CircleOfImagination Protection Settings
 # ═══════════════════════════════════════════════════════════════
@@ -64,6 +68,40 @@ recipes:
 
   # Log recipe additions/removals
   log-changes: true
+
+# ═══════════════════════════════════════════════════════════════
+# Universal Token Settings
+# ═══════════════════════════════════════════════════════════════
+
+universal-token:
+  # Token item appearance
+  item-name: "&6&lUniversal Wrap Token"
+
+  # Token lore (supports color codes and placeholders)
+  item-lore:
+    - "&7Right-click to browse all available wraps"
+    - "&7and exchange this token for one!"
+    - ""
+    - "&eLeft-click &7a wrap to preview"
+    - "&aRight-click &7a wrap to exchange"
+    - ""
+    - "&d&lUNIVERSAL TOKEN"
+
+  # GUI titles
+  gui-main-title: "&6Universal Token - Categories"
+  gui-category-title: "&6{category} Wraps"
+  gui-confirm-title: "&cConfirm Exchange?"
+
+  # Messages
+  messages:
+    token-received: "&aYou received {amount} Universal Wrap Token(s)!"
+    no-wraps-available: "&cNo wraps are currently available!"
+    wrap-exchanged: "&aSuccessfully exchanged token for &e{wrap}&a!"
+    no-token-in-hand: "&cYou must hold a Universal Token to use this command!"
+    preview-started: "&7Previewing &e{wrap}&7... Right-click again to cancel."
+    exchange-cancelled: "&7Exchange cancelled."
+    hmcwraps-not-loaded: "&cHMCWraps plugin is not loaded!"
+    no-permission: "&cYou don't have permission to use this!"
 
 # ═══════════════════════════════════════════════════════════════
 # Logging Settings
