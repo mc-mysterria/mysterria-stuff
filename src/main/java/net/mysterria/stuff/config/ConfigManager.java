@@ -81,6 +81,10 @@ public class ConfigManager {
         return config.getBoolean("features.coi-protection", true);
     }
 
+    public boolean isBoosterPatriarchEnabled() {
+        return config.getBoolean("features.booster-patriarch", true);
+    }
+
     public boolean isRecipeManagerEnabled() {
         return config.getBoolean("features.recipe-manager", true);
     }

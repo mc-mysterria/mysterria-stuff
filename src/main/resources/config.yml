@@ -38,6 +38,10 @@ features:
   # Allows players to exchange tokens for any available wrap
   universal-token: true
 
+  # Booster Patriarch System
+  # Automatically grants/removes patriarch role based on booster status
+  booster-patriarch: true
+
 # ═══════════════════════════════════════════════════════════════
 # CircleOfImagination Protection Settings
 # ═══════════════════════════════════════════════════════════════
@@ -54,6 +58,18 @@ coi-protection:
 
   # Keep inventory on death in nightmare worlds
   nightmare-keep-inventory: true
+
+# ═══════════════════════════════════════════════════════════════
+# Booster Patriarch Settings
+# ═══════════════════════════════════════════════════════════════
+
+coi-booster-patriarch:
+  # API endpoint to fetch the list of current boosters
+  api-url: "https://api.mysterria.net/api/user/boosters"
+
+  # How often to check for booster list updates (in seconds)
+  # Default: 300 seconds (5 minutes)
+  update-interval-seconds: 300
 
 # ═══════════════════════════════════════════════════════════════
 # Recipe Manager Settings

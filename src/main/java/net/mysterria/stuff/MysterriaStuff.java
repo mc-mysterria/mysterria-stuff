@@ -5,6 +5,7 @@ import net.mysterria.stuff.commands.MainCommand;
 import net.mysterria.stuff.commands.MainCommandTabCompleter;
 import net.mysterria.stuff.config.ConfigManager;
 import net.mysterria.stuff.features.battlepass.NetheriteElytraBlocker;
+import net.mysterria.stuff.features.coi.BoosterPatriarchListener;
 import net.mysterria.stuff.features.coi.DangerousActionsListener;
 import net.mysterria.stuff.features.coi.LeoderoStrikeListener;
 import net.mysterria.stuff.features.hmcwraps.listener.UniversalTokenListener;
@@ -22,6 +23,7 @@ public final class MysterriaStuff extends JavaPlugin {
     private static MysterriaStuff instance;
     private ConfigManager configManager;
     private RecipeManager recipeManager;
+    private BoosterPatriarchListener boosterPatriarchListener;
 
     public static MysterriaStuff getInstance() {
         return instance;
@@ -70,6 +72,12 @@ public final class MysterriaStuff extends JavaPlugin {
             getServer().getPluginManager().registerEvents(new DangerousActionsListener(), this);
             getServer().getPluginManager().registerEvents(new LeoderoStrikeListener(this), this);
             PrettyLogger.feature("CoI Dangerous Actions Listener");
+        }
+
+        if (configManager.isBoosterPatriarchEnabled()) {
+            boosterPatriarchListener = new BoosterPatriarchListener(this);
+            getServer().getPluginManager().registerEvents(boosterPatriarchListener, this);
+            PrettyLogger.feature("CoI Booster Patriarch System");
         }
 
         // Initialize Universal Token system
@@ -132,6 +140,11 @@ public final class MysterriaStuff extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        // Shutdown booster patriarch listener if it was enabled
+        if (boosterPatriarchListener != null) {
+            boosterPatriarchListener.shutdown();
+        }
+
         PrettyLogger.warn("MysterriaStuff is shutting down...");
         PrettyLogger.info("Thanks for using MysterriaStuff!");
     }
