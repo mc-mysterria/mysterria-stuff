@@ -93,6 +93,10 @@ public class ConfigManager {
         return config.getBoolean("features.universal-token", true);
     }
 
+    public boolean isChatControlTokenEnabled() {
+        return config.getBoolean("features.chatcontrol-token", true);
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // CoI Protection Settings
     // ═══════════════════════════════════════════════════════════════
@@ -155,6 +159,22 @@ public class ConfigManager {
 
     public String getTokenMessage(String key) {
         return config.getString("universal-token.messages." + key, "");
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ChatControl Token Settings
+    // ═══════════════════════════════════════════════════════════════
+
+    public String getChatControlTokenName() {
+        return config.getString("chatcontrol-token.item-name", "&b&lCustom Message Token");
+    }
+
+    public java.util.List<String> getChatControlTokenLore() {
+        return config.getStringList("chatcontrol-token.item-lore");
+    }
+
+    public String getChatControlMessage(String key) {
+        return config.getString("chatcontrol-token.messages." + key, "");
     }
 
     // ═══════════════════════════════════════════════════════════════

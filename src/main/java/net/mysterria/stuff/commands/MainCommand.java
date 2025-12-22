@@ -6,6 +6,8 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.mysterria.stuff.MysterriaStuff;
+import net.mysterria.stuff.features.chatcontrol.ChatControlMessageManager;
+import net.mysterria.stuff.features.chatcontrol.ChatControlSessionHandler;
 import net.mysterria.stuff.features.hmcwraps.UniversalTokenManager;
 import net.mysterria.stuff.utils.PrettyLogger;
 import net.mysterria.stuff.utils.StaticItems;
@@ -58,6 +60,18 @@ public class MainCommand implements CommandExecutor {
             case "token" -> {
                 return handleToken(sender, args);
             }
+            case "chatcontrol" -> {
+                return handleChatControl(sender, args);
+            }
+            case "chatcontrol-confirm" -> {
+                return handleChatControlConfirm(sender);
+            }
+            case "chatcontrol-cancel" -> {
+                return handleChatControlCancel(sender);
+            }
+            case "chatcontrol-restart" -> {
+                return handleChatControlRestart(sender);
+            }
             default -> {
                 sender.sendMessage(Component.text("Unknown subcommand. Use /mystuff help for available commands.")
                         .color(NamedTextColor.RED));
@@ -85,6 +99,7 @@ public class MainCommand implements CommandExecutor {
         sendCommandHelp(sender, "/mystuff export", "Export held item as bytes");
         sendCommandHelp(sender, "/mystuff recipe <list|reload>", "Manage custom recipes");
         sendCommandHelp(sender, "/mystuff token give <player> [amount]", "Give universal tokens");
+        sendCommandHelp(sender, "/mystuff chatcontrol give <player> [amount]", "Give ChatControl message tokens");
 
         sender.sendMessage(Component.empty());
         sender.sendMessage(header);
@@ -441,6 +456,142 @@ public class MainCommand implements CommandExecutor {
                 .color(NamedTextColor.RED));
         sender.sendMessage(Component.text("Available: give")
                 .color(NamedTextColor.GRAY));
+        return true;
+    }
+
+    private boolean handleChatControl(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(Component.text("Usage: /mystuff chatcontrol give <player> [amount]")
+                    .color(NamedTextColor.RED));
+            return true;
+        }
+
+        if (args[1].equalsIgnoreCase("give")) {
+            // Only the give command requires admin permission
+            if (!sender.hasPermission("mysterriastuff.chatcontrol.give")) {
+                sender.sendMessage(Component.text("You don't have permission to give ChatControl tokens!")
+                        .color(NamedTextColor.RED));
+                return true;
+            }
+
+            if (args.length < 3) {
+                sender.sendMessage(Component.text("Usage: /mystuff chatcontrol give <player> [amount]")
+                        .color(NamedTextColor.RED));
+                return true;
+            }
+
+            String playerName = args[2];
+            int amount = 1;
+
+            if (args.length >= 4) {
+                try {
+                    amount = Integer.parseInt(args[3]);
+                    if (amount < 1 || amount > 64) {
+                        sender.sendMessage(Component.text("Amount must be between 1 and 64!")
+                                .color(NamedTextColor.RED));
+                        return true;
+                    }
+                } catch (NumberFormatException e) {
+                    sender.sendMessage(Component.text("Invalid amount! Must be a number.")
+                            .color(NamedTextColor.RED));
+                    return true;
+                }
+            }
+
+            Player target = Bukkit.getPlayer(playerName);
+            if (target == null || !target.isOnline()) {
+                sender.sendMessage(Component.text("Player not found or is offline!")
+                        .color(NamedTextColor.RED));
+                return true;
+            }
+
+            // Get ChatControlMessageManager instance
+            ChatControlMessageManager manager = ChatControlMessageManager.getInstance();
+            if (manager == null) {
+                sender.sendMessage(Component.text("ChatControl Token system is not enabled!")
+                        .color(NamedTextColor.RED));
+                return true;
+            }
+
+            // Create and give token
+            ItemStack token = manager.createToken(amount);
+
+            if (target.getInventory().firstEmpty() != -1) {
+                target.getInventory().addItem(token);
+            } else {
+                target.getWorld().dropItemNaturally(target.getLocation(), token);
+            }
+
+            // Send messages
+            target.sendMessage(manager.getMessage("token-received", "amount", String.valueOf(amount)));
+
+            sender.sendMessage(Component.text("Given ")
+                    .color(NamedTextColor.GREEN)
+                    .append(Component.text(playerName).color(NamedTextColor.AQUA))
+                    .append(Component.text(" " + amount + " ChatControl Message Token(s)!").color(NamedTextColor.GREEN)));
+
+            PrettyLogger.info("Gave " + playerName + " " + amount + " ChatControl Message Token(s) (by " + sender.getName() + ")");
+            return true;
+        }
+
+        sender.sendMessage(Component.text("Unknown chatcontrol subcommand!")
+                .color(NamedTextColor.RED));
+        sender.sendMessage(Component.text("Available: give")
+                .color(NamedTextColor.GRAY));
+        return true;
+    }
+
+    private boolean handleChatControlConfirm(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(Component.text("This command can only be used by players!")
+                    .color(NamedTextColor.RED));
+            return true;
+        }
+
+        ChatControlSessionHandler sessionHandler = MysterriaStuff.getInstance().getChatControlSessionHandler();
+        if (sessionHandler == null) {
+            player.sendMessage(Component.text("ChatControl Token system is not enabled!")
+                    .color(NamedTextColor.RED));
+            return true;
+        }
+
+        sessionHandler.handleConfirmation(player);
+        return true;
+    }
+
+    private boolean handleChatControlCancel(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(Component.text("This command can only be used by players!")
+                    .color(NamedTextColor.RED));
+            return true;
+        }
+
+        ChatControlSessionHandler sessionHandler = MysterriaStuff.getInstance().getChatControlSessionHandler();
+        if (sessionHandler == null) {
+            player.sendMessage(Component.text("ChatControl Token system is not enabled!")
+                    .color(NamedTextColor.RED));
+            return true;
+        }
+
+        sessionHandler.handleCancellation(player);
+        return true;
+    }
+
+    private boolean handleChatControlRestart(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(Component.text("This command can only be used by players!")
+                    .color(NamedTextColor.RED));
+            return true;
+        }
+
+        ChatControlSessionHandler sessionHandler = MysterriaStuff.getInstance().getChatControlSessionHandler();
+        if (sessionHandler == null) {
+            player.sendMessage(Component.text("ChatControl Token system is not enabled!")
+                    .color(NamedTextColor.RED));
+            return true;
+        }
+
+        sessionHandler.handleRestart(player);
         return true;
     }
 

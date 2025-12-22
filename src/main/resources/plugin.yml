@@ -27,6 +27,9 @@ permissions:
       mysterriastuff.token: true
       mysterriastuff.token.give: true
       mysterriastuff.token.use: true
+      mysterriastuff.chatcontrol: true
+      mysterriastuff.chatcontrol.give: true
+      mysterriastuff.chatcontrol.use: true
 
   mysterriastuff.use:
     description: Allows using basic MysterriaStuff commands
@@ -62,4 +65,16 @@ permissions:
 
   mysterriastuff.token.use:
     description: Allows using universal tokens
+    default: true
+
+  mysterriastuff.chatcontrol:
+    description: Allows using ChatControl message commands
+    default: op
+
+  mysterriastuff.chatcontrol.give:
+    description: Allows giving ChatControl message tokens to players
+    default: op
+
+  mysterriastuff.chatcontrol.use:
+    description: Allows using ChatControl message tokens to set custom join/quit messages
     default: true

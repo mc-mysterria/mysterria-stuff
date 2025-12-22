@@ -42,6 +42,10 @@ features:
   # Automatically grants/removes patriarch role based on booster status
   booster-patriarch: true
 
+  # ChatControl Message Token
+  # Allows players to set custom join/quit messages in ChatControl
+  chatcontrol-token: true
+
 # ═══════════════════════════════════════════════════════════════
 # CircleOfImagination Protection Settings
 # ═══════════════════════════════════════════════════════════════
@@ -118,6 +122,59 @@ universal-token:
     exchange-cancelled: "&7Exchange cancelled."
     hmcwraps-not-loaded: "&cHMCWraps plugin is not loaded!"
     no-permission: "&cYou don't have permission to use this!"
+
+# ═══════════════════════════════════════════════════════════════
+# ChatControl Message Token Settings
+# ═══════════════════════════════════════════════════════════════
+
+chatcontrol-token:
+  # Token item appearance
+  item-name: "&b&lCustom Message Token"
+
+  # Token lore (supports color codes)
+  item-lore:
+    - "&7Right-click to set your custom"
+    - "&7join and quit messages!"
+    - ""
+    - "&eUse &6%player% &ein your messages"
+    - "&7to show your name"
+    - ""
+    - "&d&lCUSTOM MESSAGE TOKEN"
+
+  # Messages
+  messages:
+    token-received: "&aYou received {amount} Custom Message Token(s)!"
+    no-permission: "&cYou don't have permission to use this!"
+    already-in-session: "&cYou already have an active message configuration session!"
+    token-error: "&cFailed to use the token. Please try again."
+
+    session-start: "&a&l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n&b&lCustom Message Configuration\n&a&l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n&7Let's set up your custom join and quit messages!"
+    join-prompt: "&e&lStep 1: &7Type your custom &ajoin message &7in chat.\n&7Use &6%player% &7as a placeholder for your name.\n&7Example: &a%player% &7has joined the server!"
+    format-info: "&7Supports color codes: &c&lRed &6&lGold &e&lYellow &a&lGreen &b&lAqua &9&lBlue &d&lPurple"
+    join-received: "&a✓ Join message received!"
+
+    quit-prompt: "&e&lStep 2: &7Type your custom &cquit message &7in chat.\n&7Use &6%player% &7as a placeholder for your name.\n&7Example: &c%player% &7has left the server!"
+    quit-received: "&a✓ Quit message received!"
+
+    preview-header: "&a&l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n&e&lMessage Preview\n&a&l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    confirm-prompt: "&7Click a button below to confirm or cancel:"
+    use-buttons: "&cPlease use the [✓ CONFIRM] or [✗ CANCEL] buttons!"
+
+    processing: "&e⏳ Processing your messages..."
+    success: "&a&l✓ SUCCESS!\n&aYour custom join/quit messages have been set!\n&7ChatControl has been reloaded."
+
+    join-missing-placeholder: "&c✗ Your join message must contain &6%player%&c!\n&7Please try again."
+    quit-missing-placeholder: "&c✗ Your quit message must contain &6%player%&c!\n&7Please try again."
+
+    session-cancelled: "&c✗ Session cancelled. No changes were made."
+    session-restarted: "&e↻ Restarting from the beginning..."
+    no-active-session: "&cYou don't have an active configuration session!"
+    not-ready-to-confirm: "&cYou must complete all steps before confirming!"
+
+    write-error: "&c✗ Failed to write your messages. Please contact an administrator."
+    reload-failed: "&cFailed to reload ChatControl. Messages were written but may not be active."
+    reload-error: "&cError while reloading ChatControl. Please contact an administrator."
+    chatcontrol-not-found: "&cChatControl plugin directory not found! Please ensure ChatControl is installed."
 
 # ═══════════════════════════════════════════════════════════════
 # Logging Settings

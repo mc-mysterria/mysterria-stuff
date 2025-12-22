@@ -19,7 +19,8 @@ import java.util.stream.Collectors;
 public class MainCommandTabCompleter implements TabCompleter {
 
     private static final List<String> MAIN_COMMANDS = Arrays.asList(
-            "help", "info", "status", "reload", "give", "export", "debug", "recipe", "token"
+            "help", "info", "status", "reload", "give", "export", "debug", "recipe", "token",
+            "chatcontrol", "chatcontrol-confirm", "chatcontrol-cancel", "chatcontrol-restart"
     );
 
     private static final List<String> ITEM_TYPES = List.of(
@@ -31,6 +32,10 @@ public class MainCommandTabCompleter implements TabCompleter {
     );
 
     private static final List<String> TOKEN_SUBCOMMANDS = List.of(
+            "give"
+    );
+
+    private static final List<String> CHATCONTROL_SUBCOMMANDS = List.of(
             "give"
     );
 
@@ -54,6 +59,9 @@ public class MainCommandTabCompleter implements TabCompleter {
                 case "token" -> {
                     return filterStartingWith(TOKEN_SUBCOMMANDS, args[1]);
                 }
+                case "chatcontrol" -> {
+                    return filterStartingWith(CHATCONTROL_SUBCOMMANDS, args[1]);
+                }
             }
         } else if (args.length == 3) {
             // Third argument
@@ -73,11 +81,22 @@ public class MainCommandTabCompleter implements TabCompleter {
                                 .collect(Collectors.toList()),
                         args[2]
                 );
+            } else if (args[0].equalsIgnoreCase("chatcontrol") && args[1].equalsIgnoreCase("give")) {
+                // Suggest online player names for chatcontrol give command
+                return filterStartingWith(
+                        Bukkit.getOnlinePlayers().stream()
+                                .map(Player::getName)
+                                .collect(Collectors.toList()),
+                        args[2]
+                );
             }
         } else if (args.length == 4) {
             // Fourth argument
             if (args[0].equalsIgnoreCase("token") && args[1].equalsIgnoreCase("give")) {
                 // Suggest amount numbers for token give command
+                return List.of("1", "5", "10", "16", "32", "64");
+            } else if (args[0].equalsIgnoreCase("chatcontrol") && args[1].equalsIgnoreCase("give")) {
+                // Suggest amount numbers for chatcontrol give command
                 return List.of("1", "5", "10", "16", "32", "64");
             }
         }

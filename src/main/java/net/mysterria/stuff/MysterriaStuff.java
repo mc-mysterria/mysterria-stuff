@@ -5,6 +5,9 @@ import net.mysterria.stuff.commands.MainCommand;
 import net.mysterria.stuff.commands.MainCommandTabCompleter;
 import net.mysterria.stuff.config.ConfigManager;
 import net.mysterria.stuff.features.battlepass.NetheriteElytraBlocker;
+import net.mysterria.stuff.features.chatcontrol.ChatControlMessageManager;
+import net.mysterria.stuff.features.chatcontrol.ChatControlSessionHandler;
+import net.mysterria.stuff.features.chatcontrol.ChatControlTokenListener;
 import net.mysterria.stuff.features.coi.BoosterPatriarchListener;
 import net.mysterria.stuff.features.coi.DangerousActionsListener;
 import net.mysterria.stuff.features.coi.LeoderoStrikeListener;
@@ -24,6 +27,7 @@ public final class MysterriaStuff extends JavaPlugin {
     private ConfigManager configManager;
     private RecipeManager recipeManager;
     private BoosterPatriarchListener boosterPatriarchListener;
+    private ChatControlSessionHandler chatControlSessionHandler;
 
     public static MysterriaStuff getInstance() {
         return instance;
@@ -97,6 +101,18 @@ public final class MysterriaStuff extends JavaPlugin {
             }
         }
 
+        // Initialize ChatControl Message Token system
+        if (configManager.isChatControlTokenEnabled()) {
+            PrettyLogger.info("Initializing ChatControl Message Token system...");
+            ChatControlMessageManager.initialize(this);
+
+            chatControlSessionHandler = new ChatControlSessionHandler(this);
+            getServer().getPluginManager().registerEvents(chatControlSessionHandler, this);
+            getServer().getPluginManager().registerEvents(new ChatControlTokenListener(chatControlSessionHandler), this);
+
+            PrettyLogger.feature("ChatControl Message Token (Custom Join/Quit Messages)");
+        }
+
         // Initialize recipe manager
         if (configManager.isRecipeManagerEnabled()) {
             PrettyLogger.info("Initializing recipe manager...");
@@ -155,6 +171,10 @@ public final class MysterriaStuff extends JavaPlugin {
 
     public ConfigManager getConfigManager() {
         return configManager;
+    }
+
+    public ChatControlSessionHandler getChatControlSessionHandler() {
+        return chatControlSessionHandler;
     }
 
 }
