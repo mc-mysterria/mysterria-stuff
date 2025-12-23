@@ -27,7 +27,10 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-
+/**
+ * Listener that manages the Patriarch role for boosters
+ * Fetches booster list from API and grants/removes the patriarch role accordingly
+ */
 public class BoosterPatriarchListener implements Listener {
 
     private final MysterriaStuff plugin;
@@ -36,13 +39,13 @@ public class BoosterPatriarchListener implements Listener {
     private final String apiUrl;
     private final File dataFile;
 
-
+    // Set of current boosters (thread-safe)
     private final Set<String> currentBoosters;
 
-
+    // Set of players who currently have the patriarch role (thread-safe)
     private final Set<String> playersWithPatriarch;
 
-
+    // Update interval in ticks (20 ticks = 1 second)
     private final long updateIntervalTicks;
 
     private BukkitRunnable updateTask;
@@ -54,9 +57,9 @@ public class BoosterPatriarchListener implements Listener {
                 .build();
         this.gson = new Gson();
         this.apiUrl = plugin.getConfigManager().getConfig()
-                .getString("coi-booster-patriarch.api-url", "https:
+                .getString("coi-booster-patriarch.api-url", "https://api.mysterria.net/api/user/boosters");
 
-
+        // Get update interval from config (in seconds), default to 5 minutes
         int updateIntervalSeconds = plugin.getConfigManager().getConfig()
                 .getInt("coi-booster-patriarch.update-interval-seconds", 300);
         this.updateIntervalTicks = updateIntervalSeconds * 20L;
@@ -64,22 +67,24 @@ public class BoosterPatriarchListener implements Listener {
         this.currentBoosters = ConcurrentHashMap.newKeySet();
         this.playersWithPatriarch = ConcurrentHashMap.newKeySet();
 
-
+        // Setup data file for persistence
         this.dataFile = new File(plugin.getDataFolder(), "booster-patriarch-data.json");
 
-
+        // Load persisted data
         loadPersistedData();
 
-
+        // Initial fetch
         fetchBoostersAsync();
 
-
+        // Start periodic update task
         startPeriodicUpdate();
 
         PrettyLogger.info("BoosterPatriarchListener initialized with " + updateIntervalSeconds + "s update interval");
     }
 
-
+    /**
+     * Start the periodic task to fetch boosters
+     */
     private void startPeriodicUpdate() {
         updateTask = new BukkitRunnable() {
             @Override
@@ -88,12 +93,14 @@ public class BoosterPatriarchListener implements Listener {
             }
         };
 
-
+        // Run task periodically (delay = interval)
         updateTask.runTaskTimer(plugin, updateIntervalTicks, updateIntervalTicks);
         PrettyLogger.debug("Started periodic booster update task");
     }
 
-
+    /**
+     * Fetch boosters from API asynchronously
+     */
     private void fetchBoostersAsync() {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
@@ -120,7 +127,9 @@ public class BoosterPatriarchListener implements Listener {
         });
     }
 
-
+    /**
+     * Update the booster list and sync roles for online players
+     */
     private void updateBoosterList(String[] newBoosters) {
         Set<String> newBoosterSet = new HashSet<>();
         for (String booster : newBoosters) {
@@ -133,11 +142,11 @@ public class BoosterPatriarchListener implements Listener {
         Set<String> removedBoosters = new HashSet<>(currentBoosters);
         removedBoosters.removeAll(newBoosterSet);
 
-
+        // Update the current booster list
         currentBoosters.clear();
         currentBoosters.addAll(newBoosterSet);
 
-
+        // Sync roles for online players
         Bukkit.getScheduler().runTask(plugin, () -> {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 String playerName = player.getName().toLowerCase();
@@ -165,11 +174,11 @@ public class BoosterPatriarchListener implements Listener {
         Player player = event.getPlayer();
         String playerName = player.getName().toLowerCase();
 
-
+        // Check if player is in booster list
         if (currentBoosters.contains(playerName)) {
             addPatriarchRole(player);
         } else {
-
+            // If player was previously a booster but no longer is, remove the role
             if (playersWithPatriarch.contains(playerName)) {
                 removePatriarchRole(player);
             }
@@ -178,12 +187,14 @@ public class BoosterPatriarchListener implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-
+        // Clean up tracking when player leaves
         String playerName = event.getPlayer().getName().toLowerCase();
         playersWithPatriarch.remove(playerName);
     }
 
-
+    /**
+     * Add patriarch role to a player
+     */
     private void addPatriarchRole(Player player) {
         String playerName = player.getName();
         String command = "coi outer add " + playerName + " patriarch 9";
@@ -200,7 +211,9 @@ public class BoosterPatriarchListener implements Listener {
         });
     }
 
-
+    /**
+     * Remove patriarch role from a player
+     */
     private void removePatriarchRole(Player player) {
         String playerName = player.getName();
         String command = "coi outer remove " + playerName + " patriarch";
@@ -217,7 +230,9 @@ public class BoosterPatriarchListener implements Listener {
         });
     }
 
-
+    /**
+     * Load persisted data from file
+     */
     private void loadPersistedData() {
         if (!dataFile.exists()) {
             PrettyLogger.debug("No persisted booster-patriarch data found, starting fresh");
@@ -225,8 +240,7 @@ public class BoosterPatriarchListener implements Listener {
         }
 
         try (FileReader reader = new FileReader(dataFile)) {
-            Type setType = new TypeToken<HashSet<String>>() {
-            }.getType();
+            Type setType = new TypeToken<HashSet<String>>(){}.getType();
             Set<String> loadedData = gson.fromJson(reader, setType);
             if (loadedData != null) {
                 playersWithPatriarch.addAll(loadedData);
@@ -237,10 +251,12 @@ public class BoosterPatriarchListener implements Listener {
         }
     }
 
-
+    /**
+     * Save persisted data to file
+     */
     private void savePersistedData() {
         try {
-
+            // Ensure data folder exists
             if (!plugin.getDataFolder().exists()) {
                 plugin.getDataFolder().mkdirs();
             }
@@ -254,7 +270,9 @@ public class BoosterPatriarchListener implements Listener {
         }
     }
 
-
+    /**
+     * Stop the periodic update task
+     */
     public void shutdown() {
         if (updateTask != null) {
             updateTask.cancel();
