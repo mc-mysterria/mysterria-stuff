@@ -20,9 +20,7 @@ import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Arrays;
 
-/**
- * Confirmation GUI for wrap exchange
- */
+
 public class WrapConfirmationGUI {
 
     private final UniversalTokenManager manager;
@@ -33,13 +31,7 @@ public class WrapConfirmationGUI {
         this.miniMessage = MiniMessage.miniMessage();
     }
 
-    /**
-     * Open the confirmation GUI for a wrap exchange
-     * @param player The player
-     * @param wrap The wrap to exchange for
-     * @param hmcWraps HMCWraps plugin instance
-     * @param previousGui The GUI to return to if cancelled
-     */
+
     public void open(Player player, Wrap wrap, HMCWraps hmcWraps, Runnable previousGui) {
         String title = manager.getConfigManager().getGuiConfirmTitle();
         Component titleComponent = miniMessage.deserialize(title);
@@ -116,9 +108,7 @@ public class WrapConfirmationGUI {
         gui.open(player);
     }
 
-    /**
-     * Handle the confirmation of wrap exchange
-     */
+
     private void handleConfirm(Player player, Wrap wrap, HMCWraps hmcWraps) {
         ItemStack heldItem = player.getInventory().getItemInMainHand();
 
@@ -139,7 +129,7 @@ public class WrapConfirmationGUI {
                 player.sendMessage(Component.text("Please contact staff about wrap: " + wrap.getWrapName(), NamedTextColor.YELLOW));
                 PrettyLogger.warn("Wrap '" + wrap.getWrapName() + "' has null physical item during exchange");
 
-                // Refund the token since the exchange failed
+
                 ItemStack tokenRefund = manager.createToken(1);
                 if (player.getInventory().firstEmpty() == -1) {
                     player.getWorld().dropItemNaturally(player.getLocation(), tokenRefund);
@@ -151,14 +141,14 @@ public class WrapConfirmationGUI {
             }
             wrapperItem = wrap.getPhysical().toItem(hmcWraps, player);
 
-            // Manually add the PDC value that identifies this as a wrapper
+
             addWrapperPDC(wrapperItem, wrap, hmcWraps);
         } catch (Exception e) {
             player.sendMessage(Component.text("Error: Failed to create wrap item.", NamedTextColor.RED));
             player.sendMessage(Component.text("Please contact staff about wrap: " + wrap.getWrapName(), NamedTextColor.YELLOW));
             PrettyLogger.warn("Failed to get physical item for wrap '" + wrap.getWrapName() + "' during exchange: " + e.getMessage());
 
-            // Refund the token since the exchange failed
+
             ItemStack tokenRefund = manager.createToken(1);
             if (player.getInventory().firstEmpty() == -1) {
                 player.getWorld().dropItemNaturally(player.getLocation(), tokenRefund);
@@ -182,10 +172,7 @@ public class WrapConfirmationGUI {
         PrettyLogger.debug(player.getName() + " exchanged a token for wrap: " + wrapName);
     }
 
-    /**
-     * Add the HMCWraps wrapper PDC value to the item
-     * This is required for HMCWraps to recognize the item as a wrapper
-     */
+
     private void addWrapperPDC(ItemStack item, Wrap wrap, HMCWraps hmcWraps) {
         ItemMeta meta = item.getItemMeta();
         if (meta == null) {

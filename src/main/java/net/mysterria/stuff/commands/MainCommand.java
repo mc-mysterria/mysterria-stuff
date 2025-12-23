@@ -22,9 +22,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.Base64;
 
-/**
- * Main command handler for MysterriaStuff plugin
- */
+
 public class MainCommand implements CommandExecutor {
 
     @Override
@@ -81,6 +79,10 @@ public class MainCommand implements CommandExecutor {
     }
 
     private void sendHelpMessage(CommandSender sender) {
+        if (!sender.hasPermission("mysterriastuff.*")) {
+            return;
+        }
+
         Component header = Component.text("═".repeat(35)).color(TextColor.color(0xAA55FF));
         Component title = Component.text(" MysterriaStuff Commands ")
                 .color(TextColor.color(0xFFFFFF))
@@ -122,13 +124,13 @@ public class MainCommand implements CommandExecutor {
 
         PrettyLogger.info("Reloading MysterriaStuff...");
 
-        // Reload configuration
+
         MysterriaStuff.getInstance().getConfigManager().reloadConfig();
 
-        // Update debug mode
+
         PrettyLogger.setDebugMode(MysterriaStuff.getInstance().getConfigManager().isDebugMode());
 
-        // Reload recipes if enabled
+
         if (MysterriaStuff.getInstance().getRecipeManager() != null) {
             MysterriaStuff.getInstance().getRecipeManager().reloadRecipes();
         }
@@ -238,7 +240,7 @@ public class MainCommand implements CommandExecutor {
         boolean newState = !PrettyLogger.isDebugMode();
         PrettyLogger.setDebugMode(newState);
 
-        // Save to config
+
         MysterriaStuff.getInstance().getConfigManager().setDebugMode(newState);
 
         sender.sendMessage(Component.text("Debug mode: ")
@@ -424,7 +426,7 @@ public class MainCommand implements CommandExecutor {
                 return true;
             }
 
-            // Get UniversalTokenManager instance
+
             UniversalTokenManager tokenManager = UniversalTokenManager.getInstance();
             if (tokenManager == null) {
                 sender.sendMessage(Component.text("Universal Token system is not enabled!")
@@ -432,7 +434,7 @@ public class MainCommand implements CommandExecutor {
                 return true;
             }
 
-            // Create and give token
+
             ItemStack token = tokenManager.createToken(amount);
 
             if (target.getInventory().firstEmpty() != -1) {
@@ -441,7 +443,7 @@ public class MainCommand implements CommandExecutor {
                 target.getWorld().dropItemNaturally(target.getLocation(), token);
             }
 
-            // Send messages
+
             target.sendMessage(tokenManager.getMessage("token-received", "amount", String.valueOf(amount)));
 
             sender.sendMessage(Component.text("Given ")
@@ -467,7 +469,7 @@ public class MainCommand implements CommandExecutor {
         }
 
         if (args[1].equalsIgnoreCase("give")) {
-            // Only the give command requires admin permission
+
             if (!sender.hasPermission("mysterriastuff.chatcontrol.give")) {
                 sender.sendMessage(Component.text("You don't have permission to give ChatControl tokens!")
                         .color(NamedTextColor.RED));
@@ -505,7 +507,7 @@ public class MainCommand implements CommandExecutor {
                 return true;
             }
 
-            // Get ChatControlMessageManager instance
+
             ChatControlMessageManager manager = ChatControlMessageManager.getInstance();
             if (manager == null) {
                 sender.sendMessage(Component.text("ChatControl Token system is not enabled!")
@@ -513,7 +515,7 @@ public class MainCommand implements CommandExecutor {
                 return true;
             }
 
-            // Create and give token
+
             ItemStack token = manager.createToken(amount);
 
             if (target.getInventory().firstEmpty() != -1) {
@@ -522,7 +524,7 @@ public class MainCommand implements CommandExecutor {
                 target.getWorld().dropItemNaturally(target.getLocation(), token);
             }
 
-            // Send messages
+
             target.sendMessage(manager.getMessage("token-received", "amount", String.valueOf(amount)));
 
             sender.sendMessage(Component.text("Given ")

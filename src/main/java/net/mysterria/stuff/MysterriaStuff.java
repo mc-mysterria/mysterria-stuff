@@ -11,8 +11,8 @@ import net.mysterria.stuff.features.chatcontrol.ChatControlTokenListener;
 import net.mysterria.stuff.features.coi.BoosterPatriarchListener;
 import net.mysterria.stuff.features.coi.DangerousActionsListener;
 import net.mysterria.stuff.features.coi.LeoderoStrikeListener;
-import net.mysterria.stuff.features.hmcwraps.listener.UniversalTokenListener;
 import net.mysterria.stuff.features.hmcwraps.UniversalTokenManager;
+import net.mysterria.stuff.features.hmcwraps.listener.UniversalTokenListener;
 import net.mysterria.stuff.features.hmcwraps.listener.WrapPreviewListener;
 import net.mysterria.stuff.features.husktowns.LightningStrikeFix;
 import net.mysterria.stuff.features.recipes.RecipeManager;
@@ -37,13 +37,13 @@ public final class MysterriaStuff extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
-        // Load configuration first
+
         configManager = new ConfigManager(this);
 
-        // Set debug mode from config
+
         PrettyLogger.setDebugMode(configManager.isDebugMode());
 
-        // Header with beautiful formatting
+
         if (configManager.isShowHeader()) {
             PrettyLogger.header("MysterriaStuff Initializing");
         }
@@ -52,14 +52,14 @@ public final class MysterriaStuff extends JavaPlugin {
         PrettyLogger.debug("Debug mode: " + (PrettyLogger.isDebugMode() ? "enabled" : "disabled"));
         PrettyLogger.debug("Config version: " + configManager.getConfigVersion());
 
-        // Register command
+
         if (getServer().getPluginCommand("mysterriastuff") != null) {
             getServer().getPluginCommand("mysterriastuff").setExecutor(new MainCommand());
             getServer().getPluginCommand("mysterriastuff").setTabCompleter(new MainCommandTabCompleter());
             PrettyLogger.debug("Registered main command with tab completion");
         }
 
-        // Register event listeners based on config
+
         PrettyLogger.info("Registering event listeners...");
 
         if (configManager.isElytraBlockerEnabled()) {
@@ -84,7 +84,7 @@ public final class MysterriaStuff extends JavaPlugin {
             PrettyLogger.feature("CoI Booster Patriarch System");
         }
 
-        // Initialize Universal Token system
+
         if (configManager.isUniversalTokenEnabled()) {
             HMCWraps hmcWraps = loadHmcWraps();
             if (hmcWraps != null) {
@@ -101,7 +101,7 @@ public final class MysterriaStuff extends JavaPlugin {
             }
         }
 
-        // Initialize ChatControl Message Token system
+
         if (configManager.isChatControlTokenEnabled()) {
             PrettyLogger.info("Initializing ChatControl Message Token system...");
             ChatControlMessageManager.initialize(this);
@@ -113,7 +113,7 @@ public final class MysterriaStuff extends JavaPlugin {
             PrettyLogger.feature("ChatControl Message Token (Custom Join/Quit Messages)");
         }
 
-        // Initialize recipe manager
+
         if (configManager.isRecipeManagerEnabled()) {
             PrettyLogger.info("Initializing recipe manager...");
             recipeManager = new RecipeManager();
@@ -146,17 +146,17 @@ public final class MysterriaStuff extends JavaPlugin {
             }
             return (HMCWraps) plugin;
         } catch (ClassCastException e) {
-            PrettyLogger.warn("Failed to cast " + name + " plugin to HMCWraps: " + e.toString());
+            PrettyLogger.warn("Failed to cast " + name + " plugin to HMCWraps: " + e);
             return null;
         } catch (Throwable t) {
-            PrettyLogger.warn("Unexpected error while loading " + name + ": " + t.toString());
+            PrettyLogger.warn("Unexpected error while loading " + name + ": " + t);
             return null;
         }
     }
 
     @Override
     public void onDisable() {
-        // Shutdown booster patriarch listener if it was enabled
+
         if (boosterPatriarchListener != null) {
             boosterPatriarchListener.shutdown();
         }

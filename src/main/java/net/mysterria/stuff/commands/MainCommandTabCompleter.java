@@ -13,9 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * Tab completion handler for MysterriaStuff commands
- */
+
 public class MainCommandTabCompleter implements TabCompleter {
 
     private static final List<String> MAIN_COMMANDS = Arrays.asList(
@@ -45,10 +43,10 @@ public class MainCommandTabCompleter implements TabCompleter {
         List<String> completions = new ArrayList<>();
 
         if (args.length == 1) {
-            // First argument - main subcommands
+
             return filterStartingWith(MAIN_COMMANDS, args[0]);
         } else if (args.length == 2) {
-            // Second argument depends on first
+
             switch (args[0].toLowerCase()) {
                 case "give" -> {
                     return filterStartingWith(ITEM_TYPES, args[1]);
@@ -64,9 +62,9 @@ public class MainCommandTabCompleter implements TabCompleter {
                 }
             }
         } else if (args.length == 3) {
-            // Third argument
+
             if (args[0].equalsIgnoreCase("give")) {
-                // Suggest online player names
+
                 return filterStartingWith(
                         Bukkit.getOnlinePlayers().stream()
                                 .map(Player::getName)
@@ -74,7 +72,7 @@ public class MainCommandTabCompleter implements TabCompleter {
                         args[2]
                 );
             } else if (args[0].equalsIgnoreCase("token") && args[1].equalsIgnoreCase("give")) {
-                // Suggest online player names for token give command
+
                 return filterStartingWith(
                         Bukkit.getOnlinePlayers().stream()
                                 .map(Player::getName)
@@ -82,7 +80,7 @@ public class MainCommandTabCompleter implements TabCompleter {
                         args[2]
                 );
             } else if (args[0].equalsIgnoreCase("chatcontrol") && args[1].equalsIgnoreCase("give")) {
-                // Suggest online player names for chatcontrol give command
+
                 return filterStartingWith(
                         Bukkit.getOnlinePlayers().stream()
                                 .map(Player::getName)
@@ -91,12 +89,12 @@ public class MainCommandTabCompleter implements TabCompleter {
                 );
             }
         } else if (args.length == 4) {
-            // Fourth argument
+
             if (args[0].equalsIgnoreCase("token") && args[1].equalsIgnoreCase("give")) {
-                // Suggest amount numbers for token give command
+
                 return List.of("1", "5", "10", "16", "32", "64");
             } else if (args[0].equalsIgnoreCase("chatcontrol") && args[1].equalsIgnoreCase("give")) {
-                // Suggest amount numbers for chatcontrol give command
+
                 return List.of("1", "5", "10", "16", "32", "64");
             }
         }
@@ -104,9 +102,7 @@ public class MainCommandTabCompleter implements TabCompleter {
         return completions;
     }
 
-    /**
-     * Filter a list to only include strings starting with the given prefix
-     */
+
     private List<String> filterStartingWith(List<String> list, String prefix) {
         return list.stream()
                 .filter(s -> s.toLowerCase().startsWith(prefix.toLowerCase()))

@@ -9,9 +9,7 @@ import java.io.File;
 import java.util.*;
 import java.util.logging.Level;
 
-/**
- * Maps wraps to their categories by reading HMCWraps configuration files
- */
+
 public class WrapCategoryMapper {
 
     private final Plugin plugin;
@@ -22,9 +20,7 @@ public class WrapCategoryMapper {
         loadCategoryMappings();
     }
 
-    /**
-     * Load all wrap-to-category mappings from HMCWraps config files
-     */
+
     private void loadCategoryMappings() {
         File hmcWrapsFolder = new File(plugin.getDataFolder().getParentFile(), "HMCWraps");
         File wrapsFolder = new File(hmcWrapsFolder, "wraps");
@@ -52,13 +48,11 @@ public class WrapCategoryMapper {
         plugin.getLogger().info("Loaded " + wrapToCategory.size() + " wrap category mappings from HMCWraps configs");
     }
 
-    /**
-     * Parse a single YAML file and extract wrap categories
-     */
+
     private void parseWrapFile(File yamlFile) {
         YamlConfiguration config = YamlConfiguration.loadConfiguration(yamlFile);
 
-        // Check if the wrap file is enabled
+
         if (!config.getBoolean("enabled", true)) {
             return;
         }
@@ -68,7 +62,7 @@ public class WrapCategoryMapper {
             return;
         }
 
-        // Iterate through categories (SWORDS, PICKAXES, HELMETS, etc.)
+
         for (String category : itemsSection.getKeys(false)) {
             ConfigurationSection categorySection = itemsSection.getConfigurationSection(category);
             if (categorySection == null) {
@@ -80,16 +74,14 @@ public class WrapCategoryMapper {
                 continue;
             }
 
-            // Map each wrap ID to its category
+
             for (String wrapId : wrapsSection.getKeys(false)) {
                 wrapToCategory.put(wrapId, normalizeCategory(category));
             }
         }
     }
 
-    /**
-     * Normalize category names to be more user-friendly
-     */
+
     private String normalizeCategory(String rawCategory) {
         return switch (rawCategory.toLowerCase()) {
             case "swords" -> "Swords";
@@ -110,9 +102,7 @@ public class WrapCategoryMapper {
         };
     }
 
-    /**
-     * Capitalize first letter of a string
-     */
+
     private String capitalizeFirst(String str) {
         if (str == null || str.isEmpty()) {
             return str;
@@ -120,16 +110,12 @@ public class WrapCategoryMapper {
         return str.substring(0, 1).toUpperCase() + str.substring(1).toLowerCase();
     }
 
-    /**
-     * Get the category for a specific wrap
-     */
+
     public String getCategory(String wrapId) {
         return wrapToCategory.getOrDefault(wrapId, "Other");
     }
 
-    /**
-     * Categorize a map of wraps
-     */
+
     public Map<String, List<Wrap>> categorizeWraps(Map<String, Wrap> allWraps) {
         Map<String, List<Wrap>> categorized = new LinkedHashMap<>();
 
@@ -141,7 +127,7 @@ public class WrapCategoryMapper {
             categorized.computeIfAbsent(category, k -> new ArrayList<>()).add(wrap);
         }
 
-        // Sort categories alphabetically, but put "Other" at the end
+
         return categorized.entrySet().stream()
                 .sorted((e1, e2) -> {
                     if (e1.getKey().equals("Other")) return 1;
@@ -153,9 +139,7 @@ public class WrapCategoryMapper {
                         LinkedHashMap::putAll);
     }
 
-    /**
-     * Reload category mappings from disk
-     */
+
     public void reload() {
         wrapToCategory.clear();
         loadCategoryMappings();

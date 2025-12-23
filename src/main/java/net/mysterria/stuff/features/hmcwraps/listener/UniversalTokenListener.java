@@ -4,16 +4,14 @@ import de.skyslycer.hmcwraps.HMCWraps;
 import net.mysterria.stuff.features.hmcwraps.UniversalTokenManager;
 import net.mysterria.stuff.features.hmcwraps.gui.UniversalTokenGUI;
 import org.bukkit.entity.Player;
-import org.bukkit.plugin.Plugin;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
 
-/**
- * Listener for Universal Token interactions
- */
+
 public class UniversalTokenListener implements Listener {
 
     private final UniversalTokenManager manager;
@@ -26,9 +24,7 @@ public class UniversalTokenListener implements Listener {
         this.tokenGUI = new UniversalTokenGUI(plugin, previewHandler);
     }
 
-    /**
-     * Handle right-click with Universal Token
-     */
+
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
         if (!event.getAction().isRightClick()) {

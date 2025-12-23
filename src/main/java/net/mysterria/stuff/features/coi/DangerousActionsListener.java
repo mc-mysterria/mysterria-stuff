@@ -22,13 +22,18 @@ import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
-import org.bukkit.event.player.*;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class DangerousActionsListener implements Listener {
 
@@ -49,7 +54,7 @@ public class DangerousActionsListener implements Listener {
         Player player = event.getPlayer();
 
         if (player.getWorld().getName().startsWith("world_nightmare_")) {
-            // Only keep inventory if configured
+
             if (MysterriaStuff.getInstance().getConfigManager().isNightmareKeepInventory()) {
                 event.setKeepInventory(true);
                 event.setKeepLevel(true);
@@ -65,7 +70,7 @@ public class DangerousActionsListener implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        // Only reset attributes if configured
+
         if (!MysterriaStuff.getInstance().getConfigManager().isResetAttributesOnJoin()) {
             return;
         }
@@ -162,11 +167,7 @@ public class DangerousActionsListener implements Listener {
                 event.setCancelled(true);
             }
 
-//            for (SavantItem savantItem : SavantItemRegistry.getAllItems()) {
-//                if (container.has(AdventureUtil.getCoINamespacedKey("savant_" + savantItem.getItemId()))) {
-//                    event.setCancelled(true);
-//                }
-//            }
+
         }
     }
 

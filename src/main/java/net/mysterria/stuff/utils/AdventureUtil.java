@@ -16,11 +16,7 @@ public class AdventureUtil {
         return Component.text(message).color(color).decoration(TextDecoration.ITALIC, false);
     }
 
-    /**
-     * Gets a NamespacedKey for CircleOfImagination plugin
-     * @param key The key identifier (can be camelCase)
-     * @return NamespacedKey with CircleOfImagination namespace, or null if plugin not found
-     */
+
     public static NamespacedKey getCoINamespacedKey(String key) {
         JavaPlugin plugin = (JavaPlugin) Bukkit.getPluginManager().getPlugin("CircleOfImagination");
         if (plugin != null) {
@@ -29,11 +25,7 @@ public class AdventureUtil {
         return null;
     }
 
-    /**
-     * Convert MiniMessage format to legacy ampersand format
-     * @param miniMessage The MiniMessage formatted string (e.g., "<light_purple>Text <gray>More")
-     * @return Legacy formatted string (e.g., "&dText &7More")
-     */
+
     public static String convertMiniMessageToLegacy(String miniMessage) {
         if (miniMessage == null || miniMessage.isEmpty()) {
             return miniMessage;
@@ -45,11 +37,7 @@ public class AdventureUtil {
         return LegacyComponentSerializer.legacyAmpersand().serialize(component);
     }
 
-    /**
-     * Gets a NamespacedKey for MysterriaStuff plugin
-     * @param key The key identifier
-     * @return NamespacedKey with MysterriaStuff namespace
-     */
+
     public static NamespacedKey getNamespacedKey(String key) {
         return new NamespacedKey(MysterriaStuff.getInstance(), key);
     }

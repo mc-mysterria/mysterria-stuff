@@ -2,9 +2,6 @@ package net.mysterria.stuff.features.hmcwraps.listener;
 
 import de.skyslycer.hmcwraps.HMCWraps;
 import de.skyslycer.hmcwraps.serialization.wrap.Wrap;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.mysterria.stuff.features.hmcwraps.UniversalTokenManager;
 import net.mysterria.stuff.utils.AdventureUtil;
 import org.bukkit.Bukkit;
@@ -15,9 +12,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Handles wrap preview functionality using HMCWraps preview system
- */
+
 public class WrapPreviewListener implements Listener {
 
     private final UniversalTokenManager manager;
@@ -30,12 +25,7 @@ public class WrapPreviewListener implements Listener {
         this.activePreviews = new HashMap<>();
     }
 
-    /**
-     * Start a preview session for a player
-     * @param player The player
-     * @param wrap The wrap to preview
-     * @param returnGui Runnable to reopen the GUI after preview
-     */
+
     public void startPreview(Player player, Wrap wrap, Runnable returnGui) {
         UUID playerId = player.getUniqueId();
 
@@ -49,9 +39,7 @@ public class WrapPreviewListener implements Listener {
         hmcWraps.getPreviewManager().create(player, this::endPreview, wrap);
     }
 
-    /**
-     * End preview for a player and reopen the GUI
-     */
+
     public void endPreview(Player player) {
         UUID playerId = player.getUniqueId();
         PreviewSession session = activePreviews.remove(playerId);
@@ -61,5 +49,6 @@ public class WrapPreviewListener implements Listener {
         }
     }
 
-    private record PreviewSession(Wrap wrap, Runnable returnGui) {}
+    private record PreviewSession(Wrap wrap, Runnable returnGui) {
+    }
 }

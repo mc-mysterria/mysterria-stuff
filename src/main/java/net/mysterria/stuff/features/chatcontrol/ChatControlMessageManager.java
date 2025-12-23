@@ -15,9 +15,7 @@ import org.bukkit.persistence.PersistentDataType;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Manages ChatControl Message Token creation, validation, and utility methods
- */
+
 public class ChatControlMessageManager {
 
     private static ChatControlMessageManager instance;
@@ -33,27 +31,19 @@ public class ChatControlMessageManager {
         this.serializer = LegacyComponentSerializer.builder().character('&').build();
     }
 
-    /**
-     * Initialize the ChatControlMessageManager singleton
-     */
+
     public static void initialize(MysterriaStuff plugin) {
         if (instance == null) {
             instance = new ChatControlMessageManager(plugin);
         }
     }
 
-    /**
-     * Get the singleton instance
-     */
+
     public static ChatControlMessageManager getInstance() {
         return instance;
     }
 
-    /**
-     * Create a ChatControl Message Token item
-     * @param amount The stack size
-     * @return ItemStack of the token
-     */
+
     public ItemStack createToken(int amount) {
         ItemStack token = new ItemStack(Material.PAPER, amount);
         ItemMeta meta = token.getItemMeta();
@@ -78,11 +68,7 @@ public class ChatControlMessageManager {
         return token;
     }
 
-    /**
-     * Check if an ItemStack is a ChatControl Message Token
-     * @param item The item to check
-     * @return true if it's a valid token
-     */
+
     public boolean isToken(ItemStack item) {
         if (item == null || item.getType() != Material.PAPER) {
             return false;
@@ -96,12 +82,7 @@ public class ChatControlMessageManager {
         return meta.getPersistentDataContainer().has(tokenKey, PersistentDataType.BYTE);
     }
 
-    /**
-     * Consume a token from an ItemStack
-     * @param item The item stack containing tokens
-     * @param amount The number of tokens to consume
-     * @return true if successfully consumed
-     */
+
     public boolean consumeToken(ItemStack item, int amount) {
         if (!isToken(item)) {
             return false;
@@ -115,22 +96,13 @@ public class ChatControlMessageManager {
         return true;
     }
 
-    /**
-     * Get formatted message from config
-     * @param key The message key
-     * @return Formatted Component
-     */
+
     public Component getMessage(String key) {
         String message = configManager.getChatControlMessage(key);
         return serializer.deserialize(message).decoration(TextDecoration.ITALIC, false);
     }
 
-    /**
-     * Get formatted message with placeholder replacement
-     * @param key The message key
-     * @param placeholders Pairs of placeholder name and value
-     * @return Formatted Component
-     */
+
     public Component getMessage(String key, String... placeholders) {
         String message = configManager.getChatControlMessage(key);
 
@@ -141,16 +113,12 @@ public class ChatControlMessageManager {
         return serializer.deserialize(message).decoration(TextDecoration.ITALIC, false);
     }
 
-    /**
-     * Get the config manager
-     */
+
     public ConfigManager getConfigManager() {
         return configManager;
     }
 
-    /**
-     * Get the plugin instance
-     */
+
     public MysterriaStuff getPlugin() {
         return plugin;
     }

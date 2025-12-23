@@ -4,10 +4,7 @@ import net.mysterria.stuff.MysterriaStuff;
 import net.mysterria.stuff.utils.PrettyLogger;
 import org.bukkit.configuration.file.FileConfiguration;
 
-/**
- * Configuration manager for MysterriaStuff
- * Handles loading, saving, and accessing configuration values
- */
+
 public class ConfigManager {
 
     private final MysterriaStuff plugin;
@@ -18,39 +15,30 @@ public class ConfigManager {
         loadConfig();
     }
 
-    /**
-     * Load or reload the configuration
-     */
+
     public void loadConfig() {
-        // Save default config if it doesn't exist
+
         plugin.saveDefaultConfig();
 
-        // Reload from disk
+
         plugin.reloadConfig();
         config = plugin.getConfig();
 
         PrettyLogger.debug("Configuration loaded");
     }
 
-    /**
-     * Reload the configuration from disk
-     */
+
     public void reloadConfig() {
         loadConfig();
         PrettyLogger.info("Configuration reloaded");
     }
 
-    /**
-     * Save the configuration to disk
-     */
+
     public void saveConfig() {
         plugin.saveConfig();
         PrettyLogger.debug("Configuration saved");
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // General Settings
-    // ═══════════════════════════════════════════════════════════════
 
     public boolean isDebugMode() {
         return config.getBoolean("debug-mode", false);
@@ -65,9 +53,6 @@ public class ConfigManager {
         return config.getString("prefix-color", "#AA55FF");
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // Feature Toggles
-    // ═══════════════════════════════════════════════════════════════
 
     public boolean isElytraBlockerEnabled() {
         return config.getBoolean("features.elytra-blocker", true);
@@ -97,9 +82,6 @@ public class ConfigManager {
         return config.getBoolean("features.chatcontrol-token", true);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // CoI Protection Settings
-    // ═══════════════════════════════════════════════════════════════
 
     public boolean isResetAttributesOnJoin() {
         return config.getBoolean("coi-protection.reset-attributes-on-join", true);
@@ -117,9 +99,6 @@ public class ConfigManager {
         return config.getBoolean("coi-protection.nightmare-keep-inventory", true);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // Recipe Manager Settings
-    // ═══════════════════════════════════════════════════════════════
 
     public boolean isRecipesEnabled() {
         return config.getBoolean("recipes.enabled", true);
@@ -133,9 +112,6 @@ public class ConfigManager {
         return config.getBoolean("recipes.log-changes", true);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // Universal Token Settings
-    // ═══════════════════════════════════════════════════════════════
 
     public String getTokenItemName() {
         return config.getString("universal-token.item-name", "&6&lUniversal Wrap Token");
@@ -161,9 +137,6 @@ public class ConfigManager {
         return config.getString("universal-token.messages." + key, "");
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ChatControl Token Settings
-    // ═══════════════════════════════════════════════════════════════
 
     public String getChatControlTokenName() {
         return config.getString("chatcontrol-token.item-name", "&b&lCustom Message Token");
@@ -177,9 +150,6 @@ public class ConfigManager {
         return config.getString("chatcontrol-token.messages." + key, "");
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // Logging Settings
-    // ═══════════════════════════════════════════════════════════════
 
     public boolean isUseColors() {
         return config.getBoolean("logging.use-colors", true);
@@ -201,9 +171,6 @@ public class ConfigManager {
         return config.getBoolean("logging.log-features", true);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // Performance Settings
-    // ═══════════════════════════════════════════════════════════════
 
     public boolean isAsyncProcessing() {
         return config.getBoolean("performance.async-processing", true);
@@ -213,20 +180,12 @@ public class ConfigManager {
         return config.getBoolean("performance.enable-caching", true);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // Utility Methods
-    // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * Get the config version
-     */
     public int getConfigVersion() {
         return config.getInt("config-version", 1);
     }
 
-    /**
-     * Get the raw FileConfiguration object
-     */
+
     public FileConfiguration getConfig() {
         return config;
     }

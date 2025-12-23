@@ -18,12 +18,12 @@ import java.util.UUID;
 
 public class LeoderoStrikeListener implements Listener {
 
+    private static final long BASE_COOLDOWN_TIME = 20000;
+    private static final long MAX_COOLDOWN_TIME = 120000;
+    private static final long COOLDOWN_RESET_TIME = 60000;
     private final MysterriaStuff plugin;
     private final Map<UUID, Long> cooldowns;
     private final Map<UUID, Integer> usageCount;
-    private static final long BASE_COOLDOWN_TIME = 20000; // 20 seconds base
-    private static final long MAX_COOLDOWN_TIME = 120000; // 2 minutes max
-    private static final long COOLDOWN_RESET_TIME = 60000; // Reset usage count after 1 minute of no usage
 
     public LeoderoStrikeListener(MysterriaStuff plugin) {
         this.plugin = plugin;

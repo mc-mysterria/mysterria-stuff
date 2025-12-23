@@ -167,6 +167,7 @@ chatcontrol-token:
     quit-missing-placeholder: "&c✗ Your quit message must contain &6%player%&c!\n&7Please try again."
 
     session-cancelled: "&c✗ Session cancelled. No changes were made."
+    token-refunded: "&aYour token has been returned to your inventory."
     session-restarted: "&e↻ Restarting from the beginning..."
     no-active-session: "&cYou don't have an active configuration session!"
     not-ready-to-confirm: "&cYou must complete all steps before confirming!"

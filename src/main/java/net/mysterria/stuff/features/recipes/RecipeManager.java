@@ -12,10 +12,7 @@ import org.bukkit.inventory.ShapelessRecipe;
 
 import java.util.*;
 
-/**
- * Runtime recipe management system
- * Allows creating, removing, and managing custom recipes dynamically
- */
+
 public class RecipeManager {
 
     private static final Map<String, NamespacedKey> customRecipes = new HashMap<>();
@@ -29,28 +26,23 @@ public class RecipeManager {
         return instance;
     }
 
-    /**
-     * Initialize the recipe system
-     * Custom recipes can be added via commands or API
-     */
+
     public void initialize() {
         PrettyLogger.debug("Recipe manager initialized - ready to accept custom recipes");
-        // No default recipes to prevent game imbalance
-        // Use /mystuff recipe commands or API to add recipes
+
+
     }
 
-    /**
-     * Register a recipe and track it
-     */
+
     public boolean registerRecipe(Recipe recipe, String id) {
         try {
-            // Check if recipes are enabled
+
             if (!MysterriaStuff.getInstance().getConfigManager().isRecipesEnabled()) {
                 PrettyLogger.warn("Recipes are disabled in config!");
                 return false;
             }
 
-            // Check max recipe limit
+
             int maxRecipes = MysterriaStuff.getInstance().getConfigManager().getMaxRecipes();
             if (customRecipes.size() >= maxRecipes && !customRecipes.containsKey(id)) {
                 PrettyLogger.warn("Maximum recipe limit reached (" + maxRecipes + ")");
@@ -68,18 +60,18 @@ public class RecipeManager {
                 return false;
             }
 
-            // Remove if already exists
+
             if (customRecipes.containsKey(id)) {
                 removeRecipe(id);
             }
 
-            // Register the recipe
+
             boolean success = Bukkit.addRecipe(recipe);
 
             if (success) {
                 customRecipes.put(id, key);
 
-                // Log if configured
+
                 if (MysterriaStuff.getInstance().getConfigManager().isLogRecipeChanges()) {
                     PrettyLogger.info("Registered custom recipe: " + id);
                 }
@@ -95,9 +87,7 @@ public class RecipeManager {
         }
     }
 
-    /**
-     * Remove a custom recipe
-     */
+
     public boolean removeRecipe(String id) {
         NamespacedKey key = customRecipes.get(id);
         if (key == null) {
@@ -109,7 +99,7 @@ public class RecipeManager {
         if (success) {
             customRecipes.remove(id);
 
-            // Log if configured
+
             if (MysterriaStuff.getInstance().getConfigManager().isLogRecipeChanges()) {
                 PrettyLogger.info("Removed custom recipe: " + id);
             }
@@ -121,15 +111,13 @@ public class RecipeManager {
         }
     }
 
-    /**
-     * Create a shaped recipe at runtime
-     */
+
     public boolean createShapedRecipe(String id, ItemStack result, String[] shape, Map<Character, Material> ingredients) {
         try {
             NamespacedKey key = new NamespacedKey(MysterriaStuff.getInstance(), id);
             ShapedRecipe recipe = new ShapedRecipe(key, result);
 
-            // Validate shape
+
             if (shape.length < 1 || shape.length > 3) {
                 PrettyLogger.error("Invalid shape: must be 1-3 rows");
                 return false;
@@ -137,7 +125,7 @@ public class RecipeManager {
 
             recipe.shape(shape);
 
-            // Set ingredients
+
             for (Map.Entry<Character, Material> entry : ingredients.entrySet()) {
                 recipe.setIngredient(entry.getKey(), entry.getValue());
             }
@@ -149,15 +137,13 @@ public class RecipeManager {
         }
     }
 
-    /**
-     * Create a shapeless recipe at runtime
-     */
+
     public boolean createShapelessRecipe(String id, ItemStack result, List<Material> ingredients) {
         try {
             NamespacedKey key = new NamespacedKey(MysterriaStuff.getInstance(), id);
             ShapelessRecipe recipe = new ShapelessRecipe(key, result);
 
-            // Add ingredients
+
             for (Material ingredient : ingredients) {
                 recipe.addIngredient(ingredient);
             }
@@ -169,30 +155,22 @@ public class RecipeManager {
         }
     }
 
-    /**
-     * Get all custom recipe IDs
-     */
+
     public Set<String> getCustomRecipeIds() {
         return new HashSet<>(customRecipes.keySet());
     }
 
-    /**
-     * Check if a recipe exists
-     */
+
     public boolean hasRecipe(String id) {
         return customRecipes.containsKey(id);
     }
 
-    /**
-     * Get the number of custom recipes
-     */
+
     public int getRecipeCount() {
         return customRecipes.size();
     }
 
-    /**
-     * Remove all custom recipes
-     */
+
     public void removeAllRecipes() {
         PrettyLogger.debug("Removing all custom recipes...");
         List<String> ids = new ArrayList<>(customRecipes.keySet());
@@ -202,9 +180,7 @@ public class RecipeManager {
         PrettyLogger.info("Removed all custom recipes");
     }
 
-    /**
-     * Reload all recipes
-     */
+
     public void reloadRecipes() {
         PrettyLogger.debug("Reloading recipes...");
         removeAllRecipes();

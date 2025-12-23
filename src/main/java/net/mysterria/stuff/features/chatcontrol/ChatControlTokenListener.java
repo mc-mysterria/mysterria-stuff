@@ -7,9 +7,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
-/**
- * Listener for ChatControl Message Token interactions
- */
+
 public class ChatControlTokenListener implements Listener {
 
     private final ChatControlMessageManager manager;
@@ -20,9 +18,7 @@ public class ChatControlTokenListener implements Listener {
         this.sessionHandler = sessionHandler;
     }
 
-    /**
-     * Handle right-click with ChatControl Message Token
-     */
+
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
         if (!event.getAction().isRightClick()) {
@@ -48,19 +44,19 @@ public class ChatControlTokenListener implements Listener {
 
         event.setCancelled(true);
 
-        // Check if player already has an active session
+
         if (sessionHandler.hasActiveSession(player.getUniqueId())) {
             player.sendMessage(manager.getMessage("already-in-session"));
             return;
         }
 
-        // Consume the token
+
         if (!manager.consumeToken(item, 1)) {
             player.sendMessage(manager.getMessage("token-error"));
             return;
         }
 
-        // Start the configuration session
+
         sessionHandler.startSession(player);
     }
 }

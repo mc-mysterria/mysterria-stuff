@@ -20,9 +20,7 @@ import org.bukkit.plugin.Plugin;
 
 import java.util.*;
 
-/**
- * Main GUI system for browsing and selecting wraps
- */
+
 public class UniversalTokenGUI {
 
     private final UniversalTokenManager manager;
@@ -39,9 +37,7 @@ public class UniversalTokenGUI {
         this.categoryMapper = new WrapCategoryMapper(plugin);
     }
 
-    /**
-     * Open the main category selection GUI
-     */
+
     public void openMainGUI(Player player, HMCWraps hmcWraps) {
         String title = manager.getConfigManager().getGuiMainTitle();
         Component titleComponent = miniMessage.deserialize(title);
@@ -61,7 +57,7 @@ public class UniversalTokenGUI {
                 .disableAllInteractions()
                 .create();
 
-        int[] slots = {10, 12, 14, 16, 31}; // visually spaced slots
+        int[] slots = {10, 12, 14, 16, 31};
         int slotIndex = 0;
         for (Map.Entry<String, List<Wrap>> entry : categorizedWraps.entrySet()) {
             if (slotIndex >= slots.length) break;
@@ -82,9 +78,7 @@ public class UniversalTokenGUI {
         gui.open(player);
     }
 
-    /**
-     * Open a specific category GUI showing all wraps in that category
-     */
+
     private void openCategoryGUI(Player player, HMCWraps hmcWraps, String category, List<Wrap> wraps) {
         String title = manager.getConfigManager().getGuiCategoryTitle()
                 .replace("{category}", category);
@@ -149,25 +143,19 @@ public class UniversalTokenGUI {
         gui.open(player);
     }
 
-    /**
-     * Handle wrap preview
-     */
+
     private void handlePreview(Player player, Wrap wrap, HMCWraps hmcWraps, Runnable returnGui) {
         player.closeInventory();
 
         previewHandler.startPreview(player, wrap, returnGui);
     }
 
-    /**
-     * Categorize wraps using the WrapCategoryMapper that reads HMCWraps config files
-     */
+
     private Map<String, List<Wrap>> categorizeWraps(Map<String, Wrap> allWraps) {
         return categoryMapper.categorizeWraps(allWraps);
     }
 
-    /**
-     * Create a category display item
-     */
+
     private ItemStack createCategoryItem(String category, int count) {
         Material material = getCategoryMaterial(category);
         ItemStack item = new ItemStack(material);
@@ -187,9 +175,7 @@ public class UniversalTokenGUI {
         return item;
     }
 
-    /**
-     * Get the appropriate material for a category
-     */
+
     private Material getCategoryMaterial(String category) {
         return switch (category.toLowerCase()) {
             case "helmets" -> Material.DIAMOND_HELMET;
@@ -211,9 +197,7 @@ public class UniversalTokenGUI {
         };
     }
 
-    /**
-     * Create a wrap display item for the GUI
-     */
+
     private ItemStack createWrapDisplayItem(Wrap wrap, HMCWraps hmcWraps, Player player) {
         ItemStack wrapItem = new ItemStack(Material.PAPER);
 
