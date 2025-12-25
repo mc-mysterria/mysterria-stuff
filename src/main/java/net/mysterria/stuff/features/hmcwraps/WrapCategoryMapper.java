@@ -101,7 +101,6 @@ public class WrapCategoryMapper {
         };
     }
 
-
     private String capitalizeFirst(String str) {
         if (str == null || str.isEmpty()) {
             return str;
@@ -109,11 +108,9 @@ public class WrapCategoryMapper {
         return str.substring(0, 1).toUpperCase() + str.substring(1).toLowerCase();
     }
 
-
     public String getCategory(String wrapId) {
         return wrapToCategory.getOrDefault(wrapId, "Other");
     }
-
 
     public Map<String, List<Wrap>> categorizeWraps(Map<String, Wrap> allWraps) {
         Map<String, List<Wrap>> categorized = new LinkedHashMap<>();

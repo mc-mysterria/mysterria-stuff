@@ -49,17 +49,14 @@ public class UniversalTokenGUI {
 
         Map<String, List<Wrap>> categorizedWraps = categorizeWraps(allWraps);
 
-        Gui gui = Gui.gui()
+        PaginatedGui gui = Gui.paginated()
                 .title(titleComponent)
-                .rows(5)
+                .rows(6)
+                .pageSize(45)
                 .disableAllInteractions()
                 .create();
 
-        int[] slots = {10, 12, 14, 16, 31};
-        int slotIndex = 0;
         for (Map.Entry<String, List<Wrap>> entry : categorizedWraps.entrySet()) {
-            if (slotIndex >= slots.length) break;
-
             String category = entry.getKey();
             List<Wrap> wraps = entry.getValue();
 
@@ -69,9 +66,30 @@ public class UniversalTokenGUI {
                 openCategoryGUI(player, hmcWraps, category, wraps);
             });
 
-            gui.setItem(slots[slotIndex], guiItem);
-            slotIndex++;
+            gui.addItem(guiItem);
         }
+
+        ItemStack previousItem = new ItemStack(Material.ARROW);
+        ItemMeta previousMeta = previousItem.getItemMeta();
+        if (previousMeta != null) {
+            previousMeta.displayName(Component.text("← Previous Page", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
+            previousItem.setItemMeta(previousMeta);
+        }
+        gui.setItem(6, 3, new GuiItem(previousItem, event -> {
+            event.setCancelled(true);
+            gui.previous();
+        }));
+
+        ItemStack nextItem = new ItemStack(Material.ARROW);
+        ItemMeta nextMeta = nextItem.getItemMeta();
+        if (nextMeta != null) {
+            nextMeta.displayName(Component.text("Next Page →", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
+            nextItem.setItemMeta(nextMeta);
+        }
+        gui.setItem(6, 5, new GuiItem(nextItem, event -> {
+            event.setCancelled(true);
+            gui.next();
+        }));
 
         gui.open(player);
     }
@@ -144,7 +162,6 @@ public class UniversalTokenGUI {
 
     private void handlePreview(Player player, Wrap wrap, HMCWraps hmcWraps, Runnable returnGui) {
         player.closeInventory();
-
         previewHandler.startPreview(player, wrap, returnGui);
     }
 
