@@ -135,6 +135,11 @@ public class MainCommand implements CommandExecutor {
             MysterriaStuff.getInstance().getRecipeManager().reloadRecipes();
         }
 
+        if (UniversalTokenManager.getInstance() != null) {
+            UniversalTokenManager.getInstance().reload();
+            PrettyLogger.info("Reloaded HMCWraps category mappings");
+        }
+
         sender.sendMessage(Component.text("MysterriaStuff reloaded successfully!")
                 .color(NamedTextColor.GREEN));
         PrettyLogger.success("Plugin reloaded by " + sender.getName());

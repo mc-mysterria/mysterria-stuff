@@ -20,7 +20,6 @@ public class WrapCategoryMapper {
         loadCategoryMappings();
     }
 
-
     private void loadCategoryMappings() {
         File hmcWrapsFolder = new File(plugin.getDataFolder().getParentFile(), "HMCWraps");
         File wrapsFolder = new File(hmcWrapsFolder, "wraps");

@@ -23,12 +23,14 @@ public class UniversalTokenManager {
     private final ConfigManager configManager;
     private final NamespacedKey tokenKey;
     private final LegacyComponentSerializer serializer;
+    private WrapCategoryMapper categoryMapper;
 
     private UniversalTokenManager(MysterriaStuff plugin) {
         this.plugin = plugin;
         this.configManager = plugin.getConfigManager();
         this.tokenKey = AdventureUtil.getNamespacedKey("universal_token");
         this.serializer = LegacyComponentSerializer.builder().character('&').build();
+        this.categoryMapper = new WrapCategoryMapper(plugin);
     }
 
 
@@ -121,5 +123,15 @@ public class UniversalTokenManager {
 
     public MysterriaStuff getPlugin() {
         return plugin;
+    }
+
+    public WrapCategoryMapper getCategoryMapper() {
+        return categoryMapper;
+    }
+
+    public void reload() {
+        if (categoryMapper != null) {
+            categoryMapper.reload();
+        }
     }
 }

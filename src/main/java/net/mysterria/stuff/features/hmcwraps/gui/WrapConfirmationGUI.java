@@ -31,7 +31,6 @@ public class WrapConfirmationGUI {
         this.miniMessage = MiniMessage.miniMessage();
     }
 
-
     public void open(Player player, Wrap wrap, HMCWraps hmcWraps, Runnable previousGui) {
         String title = manager.getConfigManager().getGuiConfirmTitle();
         Component titleComponent = miniMessage.deserialize(title);

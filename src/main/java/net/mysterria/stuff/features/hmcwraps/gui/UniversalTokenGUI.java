@@ -27,14 +27,12 @@ public class UniversalTokenGUI {
     private final WrapConfirmationGUI confirmationGUI;
     private final WrapPreviewListener previewHandler;
     private final MiniMessage miniMessage;
-    private final WrapCategoryMapper categoryMapper;
 
     public UniversalTokenGUI(Plugin plugin, WrapPreviewListener previewHandler) {
         this.manager = UniversalTokenManager.getInstance();
         this.confirmationGUI = new WrapConfirmationGUI();
         this.previewHandler = previewHandler;
         this.miniMessage = MiniMessage.miniMessage();
-        this.categoryMapper = new WrapCategoryMapper(plugin);
     }
 
 
@@ -152,6 +150,7 @@ public class UniversalTokenGUI {
 
 
     private Map<String, List<Wrap>> categorizeWraps(Map<String, Wrap> allWraps) {
+        WrapCategoryMapper categoryMapper = manager.getCategoryMapper();
         return categoryMapper.categorizeWraps(allWraps);
     }
 
