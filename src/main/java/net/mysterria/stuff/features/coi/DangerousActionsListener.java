@@ -20,14 +20,18 @@ import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.BundleMeta;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
@@ -42,6 +46,12 @@ public class DangerousActionsListener implements Listener {
 
     @EventHandler
     public void onItemPickup(EntityPickupItemEvent event) {
+        if (isForbiddenSickle(event.getItem().getItemStack())) {
+            event.setCancelled(true);
+            event.getItem().remove();
+            return;
+        }
+
         if (!MysterriaStuff.getInstance().getConfigManager().isBlockNightmarePickups()) {
             return;
         }
@@ -73,7 +83,7 @@ public class DangerousActionsListener implements Listener {
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        cleanPlayerSickles(player);
+        scrubForbiddenSickles(player);
 
         if (!MysterriaStuff.getInstance().getConfigManager().isResetAttributesOnJoin()) {
             return;
@@ -127,7 +137,7 @@ public class DangerousActionsListener implements Listener {
         try {
             List<ItemStack> itemsToRemove = new ArrayList<>();
             for (ItemStack item : event.getDrops()) {
-                if (checkForNonIngredientMysticalAlignment(item)) {
+                if (checkForNonIngredientMysticalAlignment(item) || isForbiddenSickle(item)) {
                     itemsToRemove.add(item);
                 }
             }
@@ -181,6 +191,10 @@ public class DangerousActionsListener implements Listener {
 
     @EventHandler
     public void onItemMoveEvent(InventoryClickEvent event) {
+        if (removeForbiddenSickleFromClick(event)) {
+            return;
+        }
+
         ItemStack item = event.getCurrentItem();
         if (item == null) return;
         if (item.getType() == Material.AIR) return;
@@ -208,6 +222,10 @@ public class DangerousActionsListener implements Listener {
 
     @EventHandler
     public void onInventoryInteraction(InventoryClickEvent event) {
+        if (removeForbiddenSickleFromClick(event)) {
+            return;
+        }
+
         ItemStack item = event.getCurrentItem();
         if (item == null) return;
         if (item.getType() == Material.AIR) return;
@@ -256,6 +274,10 @@ public class DangerousActionsListener implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
+        if (removeForbiddenSickleFromClick(event)) {
+            return;
+        }
+
         if (event.getView().getType() == InventoryType.CRAFTING) {
             if (event.getSlotType() == InventoryType.SlotType.CRAFTING) {
                 if (event.getAction() == InventoryAction.PLACE_ALL || event.getAction() == InventoryAction.PLACE_ONE || event.getAction() == InventoryAction.PLACE_SOME) {
@@ -278,6 +300,10 @@ public class DangerousActionsListener implements Listener {
 
     @EventHandler
     public void onPouchItemDrop(InventoryClickEvent event) {
+        if (removeForbiddenSickleFromClick(event)) {
+            return;
+        }
+
         if (event.getCurrentItem() == null) return;
         if (event.getCursor().getType() == Material.AIR) return;
 
@@ -437,6 +463,10 @@ public class DangerousActionsListener implements Listener {
             return;
         }
 
+        if (removeForbiddenSickleFromClick(event)) {
+            return;
+        }
+
         ItemStack cursor = event.getCursor();
         ItemStack current = event.getCurrentItem();
         ItemStack hotbar = null;
@@ -452,41 +482,168 @@ public class DangerousActionsListener implements Listener {
         }
     }
 
-    private void cleanPlayerSickles(Player player) {
-        try {
-            Inventory inventory = player.getInventory();
-            boolean updated = false;
+    @EventHandler
+    public void onInventoryDrag(InventoryDragEvent event) {
+        if (!isForbiddenSickle(event.getOldCursor())) {
+            return;
+        }
 
-            for (int i = 0; i < inventory.getSize(); i++) {
-                ItemStack item = inventory.getItem(i);
-                if (item == null || item.getType() == Material.AIR) continue;
+        event.setCancelled(true);
+        event.setCursor(null);
+    }
 
-                if (isBuggedSickle(item)) {
-                    inventory.setItem(i, null);
-                    updated = true;
-                }
+    @EventHandler
+    public void onInventoryOpen(InventoryOpenEvent event) {
+        boolean updated = cleanInventorySickles(event.getInventory());
+        if (event.getPlayer() instanceof Player player) {
+            updated |= cleanInventorySickles(player.getInventory());
+            if (updated) {
+                player.updateInventory();
             }
+        }
+    }
+
+    @EventHandler
+    public void onPlayerDropItem(PlayerDropItemEvent event) {
+        if (!isForbiddenSickle(event.getItemDrop().getItemStack())) {
+            return;
+        }
+
+        event.setCancelled(true);
+        event.getItemDrop().remove();
+        event.getPlayer().updateInventory();
+    }
+
+    private void scrubForbiddenSickles(Player player) {
+        try {
+            boolean updated = cleanInventorySickles(player.getInventory());
+            updated |= cleanInventorySickles(player.getEnderChest());
 
             if (updated) {
                 player.updateInventory();
-                PrettyLogger.info("Successfully removed bugged sickles in inventory of player: " + player.getName());
+                PrettyLogger.info("Successfully removed forbidden sickles for player: " + player.getName());
             }
         } catch (Exception e) {
             PrettyLogger.debug("Error while cleaning sickles for player: " + player.getName() + " - " + e.getMessage());
         }
     }
 
-    private boolean isBuggedSickle(ItemStack item) {
+    private boolean cleanInventorySickles(Inventory inventory) {
+        boolean updated = false;
+
+        for (int i = 0; i < inventory.getSize(); i++) {
+            ItemStack item = inventory.getItem(i);
+            if (item == null || item.getType() == Material.AIR) {
+                continue;
+            }
+
+            if (isForbiddenSickle(item)) {
+                inventory.setItem(i, null);
+                updated = true;
+                continue;
+            }
+
+            if (removeForbiddenSicklesFromBundle(item)) {
+                inventory.setItem(i, item);
+                updated = true;
+            }
+        }
+
+        return updated;
+    }
+
+    private boolean removeForbiddenSickleFromClick(InventoryClickEvent event) {
+        boolean removed = false;
+
+        ItemStack cursor = event.getCursor();
+        if (isForbiddenSickle(cursor)) {
+            event.setCursor(null);
+            removed = true;
+        } else if (removeForbiddenSicklesFromBundle(cursor)) {
+            event.setCursor(cursor);
+            removed = true;
+        }
+
+        ItemStack current = event.getCurrentItem();
+        if (isForbiddenSickle(current)) {
+            if (event.getClickedInventory() != null) {
+                event.getClickedInventory().setItem(event.getSlot(), null);
+            }
+            removed = true;
+        } else if (removeForbiddenSicklesFromBundle(current)) {
+            if (event.getClickedInventory() != null) {
+                event.getClickedInventory().setItem(event.getSlot(), current);
+            }
+            removed = true;
+        }
+
+        if (event.getAction() == InventoryAction.HOTBAR_SWAP || event.getAction() == InventoryAction.HOTBAR_MOVE_AND_READD) {
+            int hotbarButton = event.getHotbarButton();
+            if (hotbarButton >= 0 && hotbarButton < 9) {
+                Inventory bottomInventory = event.getView().getBottomInventory();
+                ItemStack hotbar = bottomInventory.getItem(hotbarButton);
+                if (isForbiddenSickle(hotbar)) {
+                    bottomInventory.setItem(hotbarButton, null);
+                    removed = true;
+                } else if (removeForbiddenSicklesFromBundle(hotbar)) {
+                    bottomInventory.setItem(hotbarButton, hotbar);
+                    removed = true;
+                }
+            }
+        }
+
+        if (removed) {
+            event.setCancelled(true);
+            if (event.getWhoClicked() instanceof Player player) {
+                player.updateInventory();
+            }
+        }
+
+        return removed;
+    }
+
+    private boolean removeForbiddenSicklesFromBundle(ItemStack item) {
+        if (item == null || item.getType() != Material.BUNDLE || !item.hasItemMeta()) {
+            return false;
+        }
+
+        BundleMeta bundleMeta = (BundleMeta) item.getItemMeta();
+        if (!bundleMeta.hasItems()) {
+            return false;
+        }
+
+        List<ItemStack> keptItems = new ArrayList<>();
+        boolean updated = false;
+        for (ItemStack bundledItem : bundleMeta.getItems()) {
+            if (isForbiddenSickle(bundledItem)) {
+                updated = true;
+                continue;
+            }
+
+            if (removeForbiddenSicklesFromBundle(bundledItem)) {
+                updated = true;
+            }
+
+            keptItems.add(bundledItem);
+        }
+
+        if (updated) {
+            bundleMeta.setItems(keptItems);
+            item.setItemMeta(bundleMeta);
+        }
+
+        return updated;
+    }
+
+    private boolean isForbiddenSickle(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return false;
         ItemMeta meta = item.getItemMeta();
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
         NamespacedKey namespacedKey = new NamespacedKey("vane", "custom_item_identifier");
-        
+
         if (pdc.has(namespacedKey, PersistentDataType.STRING)) {
             String value = pdc.get(namespacedKey, PersistentDataType.STRING);
-            if (value != null && value.contains("sickle")) {
-                return meta.hasAttributeModifiers();
-            }
+            return value != null && value.contains("sickle");
         }
         return false;
     }
