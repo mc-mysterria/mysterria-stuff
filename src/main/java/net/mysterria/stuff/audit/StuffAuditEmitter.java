@@ -9,14 +9,13 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.logging.Level;
 
 /** Best-effort bridge to the optional shared Mysterria audit ledger. */
 public final class StuffAuditEmitter {
     private static final String NAMESPACE = "mysterria-stuff.";
     private static final int MAX_METADATA_ENTRIES = 32;
     private static final int MAX_TEXT = 256;
-    private static AuditProducer producer;
+    private static volatile AuditProducer producer;
 
     private StuffAuditEmitter() {
     }
@@ -54,7 +53,8 @@ public final class StuffAuditEmitter {
                     AuditPrivacy.STAFF_RESTRICTED, correlationId, businessId, actorId,
                     subjectId, targetId, reason, boundedMetadata(values));
         } catch (Throwable failure) {
-            logUnavailable(plugin, failure);
+            AuditProducer current = producer;
+            if (current != null) current.recordFailure();
         }
     }
 
@@ -94,14 +94,6 @@ public final class StuffAuditEmitter {
         return values;
     }
 
-    private static void logUnavailable(JavaPlugin plugin, Throwable failure) {
-        if (plugin == null) return;
-        try {
-            plugin.getLogger().log(Level.FINE, "Mysterria audit emission was unavailable", failure);
-        } catch (Throwable ignored) {
-            // Audit failures, including diagnostics, must never gate gameplay.
-        }
-    }
 
     private static Map<String, Object> boundedMetadata(Map<String, ?> values) {
         Map<String, Object> metadata = new LinkedHashMap<>();

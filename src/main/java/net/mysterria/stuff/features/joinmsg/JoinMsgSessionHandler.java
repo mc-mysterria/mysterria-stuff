@@ -314,6 +314,7 @@ public class JoinMsgSessionHandler implements Listener {
     }
 
     private Map<String, Object> deliverItem(Player player, ItemStack item) {
+        int requestedAmount = item.getAmount();
         Map<Integer, ItemStack> leftovers = player.getInventory().addItem(item);
         int droppedAmount = 0;
         for (ItemStack leftover : leftovers.values()) {
@@ -321,7 +322,7 @@ public class JoinMsgSessionHandler implements Listener {
             droppedAmount += leftover.getAmount();
             player.getWorld().dropItemNaturally(player.getLocation(), leftover);
         }
-        int deliveredAmount = Math.max(0, item.getAmount() - droppedAmount);
+        int deliveredAmount = Math.max(0, requestedAmount - droppedAmount);
         return Map.of("delivery_mode", droppedAmount > 0 ? "dropped" : "inventory",
                 "delivered_amount", deliveredAmount, "dropped_amount", droppedAmount);
     }

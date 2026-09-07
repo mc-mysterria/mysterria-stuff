@@ -1,9 +1,8 @@
 # Mysterria Stuff audit events
 
-`mysterria-stuff` emits optional, staff-restricted events through the
-`MysterriaAudit` service supplied by Circle of Imagination. The bridge is
-best-effort: an unavailable provider, a full provider queue, or an emission
-failure never blocks a token, cosmetic, or message-store operation.
+Mysterria Stuff emits best-effort, staff-restricted events through its shaded neutral audit client. A full queue or failed spool write does not block token, cosmetic, or message-store operations.
+
+The optional per-server audit engine owns SQLite and local staff searches. Each producer writes to its own bounded spool directory even when the engine is absent. Existing gameplay dependencies remain separate from audit transport.
 
 ## Canonical events
 

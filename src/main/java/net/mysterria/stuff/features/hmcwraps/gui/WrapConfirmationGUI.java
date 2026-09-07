@@ -199,6 +199,7 @@ public class WrapConfirmationGUI {
     }
 
     private Map<String, Object> deliverItem(Player player, ItemStack item) {
+        int requestedAmount = item.getAmount();
         Map<Integer, ItemStack> leftovers = player.getInventory().addItem(item);
         int droppedAmount = 0;
         for (ItemStack leftover : leftovers.values()) {
@@ -206,7 +207,7 @@ public class WrapConfirmationGUI {
             droppedAmount += leftover.getAmount();
             player.getWorld().dropItemNaturally(player.getLocation(), leftover);
         }
-        int deliveredAmount = Math.max(0, item.getAmount() - droppedAmount);
+        int deliveredAmount = Math.max(0, requestedAmount - droppedAmount);
         String deliveryMode = droppedAmount == 0 ? "inventory"
                 : deliveredAmount == 0 ? "dropped" : "partial";
         return Map.of("delivery_mode", deliveryMode,

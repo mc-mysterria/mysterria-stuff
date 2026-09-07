@@ -961,6 +961,7 @@ public class MainCommand implements CommandExecutor {
     }
 
     private Map<String, Object> deliverItem(Player target, ItemStack item) {
+        int requestedAmount = item.getAmount();
         Map<Integer, ItemStack> leftovers = target.getInventory().addItem(item);
         int droppedAmount = 0;
         for (ItemStack leftover : leftovers.values()) {
@@ -968,7 +969,7 @@ public class MainCommand implements CommandExecutor {
             droppedAmount += leftover.getAmount();
             target.getWorld().dropItemNaturally(target.getLocation(), leftover);
         }
-        int deliveredAmount = Math.max(0, item.getAmount() - droppedAmount);
+        int deliveredAmount = Math.max(0, requestedAmount - droppedAmount);
         return Map.of("delivery_mode", droppedAmount > 0 ? "dropped" : "inventory",
                 "delivered_amount", deliveredAmount, "dropped_amount", droppedAmount);
     }
