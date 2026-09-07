@@ -35,10 +35,16 @@ tasks.build.dependsOn(shadowJar)
 
 dependencies {
     implementation("dev.triumphteam:triumph-gui-paper:3.1.13")
-    compileOnly("dev.ua.ikeepcalm:circle-of-imagination-api:1.4.0-SNAPSHOT")
+    compileOnly("dev.ua.ikeepcalm:circle-of-imagination-api:1.4.8-SNAPSHOT")
     compileOnly("de.skyslycer.hmcwraps:api:1.7.0")
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
     compileOnly("it.pino.zelchat:zelchat-api:2.0.0-pre-27")
+    implementation 'dev.ua.ikeepcalm.mysterria:audit-client:1.0.0'
+}
+
+shadowJar {
+    archiveClassifier.set('')
+    relocate 'dev.ua.ikeepcalm.mysterria.audit', 'net.mysterria.stuff.libs.audit'
 }
 
 tasks {
