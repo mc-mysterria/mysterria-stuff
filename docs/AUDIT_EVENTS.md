@@ -30,3 +30,7 @@ effects, cosmetic equip/remove events, and HMCWraps ownership changes are not
 emitted here. HMCWraps owns the durable cosmetic ownership model and does not
 expose an ownership-mutation API in its integration contract; the HMCWraps
 plugin's own event/owner records are the authoritative source for those changes.
+
+## Overlap policy
+
+Routine administrative grant success messages use PrettyLogger.debug; token/cosmetic/message mutation events remain the staff audit view. Player-facing confirmations and actionable errors remain.

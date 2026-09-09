@@ -224,7 +224,7 @@ public class MainCommand implements CommandExecutor {
                         .append(Component.text(playerName).color(NamedTextColor.AQUA))
                         .append(Component.text(" a reinforced elytra!").color(NamedTextColor.GREEN)));
 
-                PrettyLogger.info("Gave " + playerName + " a reinforced elytra (by " + sender.getName() + ")");
+                PrettyLogger.debug("Gave " + playerName + " a reinforced elytra (by " + sender.getName() + ")");
                 return true;
             }
             default -> {
@@ -494,7 +494,7 @@ public class MainCommand implements CommandExecutor {
                     .append(Component.text(playerName).color(NamedTextColor.AQUA))
                     .append(Component.text(" " + amount + " Universal Token(s)!").color(NamedTextColor.GREEN)));
 
-            PrettyLogger.info("Gave " + playerName + " " + amount + " Universal Token(s) (by " + sender.getName() + ")");
+            PrettyLogger.debug("Gave " + playerName + " " + amount + " Universal Token(s) (by " + sender.getName() + ")");
             return true;
         }
         sender.sendMessage(Component.text("Unknown token subcommand!")
@@ -572,7 +572,7 @@ public class MainCommand implements CommandExecutor {
                 .append(Component.text(playerName).color(NamedTextColor.AQUA))
                 .append(Component.text(" " + amount + " Join/Quit Message Token(s)!").color(NamedTextColor.GREEN)));
 
-        PrettyLogger.info("Gave " + playerName + " " + amount + " Join/Quit Message Token(s) (by " + sender.getName() + ")");
+        PrettyLogger.debug("Gave " + playerName + " " + amount + " Join/Quit Message Token(s) (by " + sender.getName() + ")");
         return true;
     }
 
@@ -1036,7 +1036,7 @@ public class MainCommand implements CommandExecutor {
                         .append(Component.text("!").color(NamedTextColor.GREEN)));
                 target.sendMessage(Component.text("You've been given the Last Sprint starter kit by an admin!")
                         .color(NamedTextColor.GREEN));
-                PrettyLogger.info("Force-gave Last Sprint kit to " + target.getName() + " (by " + sender.getName() + ")");
+                PrettyLogger.debug("Force-gave Last Sprint kit to " + target.getName() + " (by " + sender.getName() + ")");
                 return true;
             }
             case "reset" -> {
@@ -1074,7 +1074,7 @@ public class MainCommand implements CommandExecutor {
                         .color(NamedTextColor.GREEN)
                         .append(Component.text("ENABLED").color(NamedTextColor.GREEN).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD))
                         .append(Component.text(" — all new players joining will receive the kit.").color(NamedTextColor.GREEN)));
-                PrettyLogger.info("Last Sprint activated by " + sender.getName());
+                PrettyLogger.debug("Last Sprint activated by " + sender.getName());
                 return true;
             }
             case "disable" -> {
@@ -1088,7 +1088,7 @@ public class MainCommand implements CommandExecutor {
                         .color(NamedTextColor.YELLOW)
                         .append(Component.text("DISABLED").color(NamedTextColor.RED).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD))
                         .append(Component.text(" — auto-give on join is off.").color(NamedTextColor.YELLOW)));
-                PrettyLogger.info("Last Sprint deactivated by " + sender.getName());
+                PrettyLogger.debug("Last Sprint deactivated by " + sender.getName());
                 return true;
             }
             case "info" -> {
