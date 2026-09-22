@@ -248,6 +248,8 @@ public final class ZelChatAliasIntegration implements ChatAliasIntegration, Chat
     private enum ChatShortcut {
         CHURCH("church", "cc", "<message>", "c", "cc", "church"),
         ORGANIZATION("organization", "oc", "<message>", "o", "oc", "org", "order"),
+        // Circle of Imagination registers /lineage chat for Error families.
+        LINEAGE("lineage", "lineage chat", "<message>", "lin", "lineage", "family"),
         LANDS("lands", "lands chat", "<message>", "l", "land", "lands"),
         NATIONS("nations", "nations chat", "<message>", "n", "nation", "nations"),
         // The deployed MythicDungeons plugin registers /p as its party-chat command.
