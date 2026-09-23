@@ -8,6 +8,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.mysterria.stuff.MysterriaStuff;
+import net.mysterria.stuff.audit.StuffAuditEmitter;
 import net.mysterria.stuff.utils.AdventureUtil;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -36,14 +37,14 @@ public class JoinMsgSessionHandler implements Listener {
     }
 
 
-    public void startSession(Player player) {
+    public void startSession(Player player, UUID correlationId) {
         UUID playerId = player.getUniqueId();
 
 
         activeSessions.remove(playerId);
 
 
-        PlayerSession session = new PlayerSession(player);
+        PlayerSession session = new PlayerSession(player, correlationId);
         activeSessions.put(playerId, session);
 
 
@@ -243,6 +244,13 @@ public class JoinMsgSessionHandler implements Listener {
             case MISSING_PLACEHOLDER_QUIT -> player.sendMessage(manager.getMessage("quit-missing-placeholder"));
             case WRITE_ERROR -> player.sendMessage(manager.getMessage("write-error"));
         }
+        if (result == JoinMsgStore.SetResult.OK) {
+            String messageType = session.getJoinMessage() != null && session.getQuitMessage() != null
+                    ? "join_and_quit" : session.getJoinMessage() != null ? "join" : "quit";
+            StuffAuditEmitter.emit(plugin, "joinmsg.message_set", session.getCorrelationId(),
+                    "joinmsg:" + playerId, playerId, playerId, null, "self_service",
+                    Map.of("message_type", messageType, "target_name", player.getName()));
+        }
     }
 
 
@@ -250,7 +258,8 @@ public class JoinMsgSessionHandler implements Listener {
         UUID playerId = player.getUniqueId();
 
 
-        if (!activeSessions.containsKey(playerId)) {
+        PlayerSession session = activeSessions.get(playerId);
+        if (session == null) {
             player.sendMessage(manager.getMessage("no-active-session"));
             return;
         }
@@ -260,7 +269,15 @@ public class JoinMsgSessionHandler implements Listener {
 
 
         ItemStack token = manager.createToken(1);
-        player.getInventory().addItem(token);
+        Map<String, Object> delivery = deliverItem(player, token);
+        Map<String, Object> metadata = new java.util.LinkedHashMap<>(
+                StuffAuditEmitter.tokenMetadata("joinmsg", 1, "joinmsg_session_cancelled"));
+        metadata.putAll(delivery);
+
+        StuffAuditEmitter.emit(plugin, "token.granted", session.getCorrelationId(),
+                StuffAuditEmitter.tokenBusinessId("joinmsg"), player.getUniqueId(),
+                player.getUniqueId(), null, "joinmsg_session_cancelled",
+                metadata);
 
 
         player.sendMessage(manager.getMessage("session-cancelled"));
@@ -271,7 +288,8 @@ public class JoinMsgSessionHandler implements Listener {
     public void handleRestart(Player player) {
         UUID playerId = player.getUniqueId();
 
-        if (!activeSessions.containsKey(playerId)) {
+        PlayerSession session = activeSessions.get(playerId);
+        if (session == null) {
             player.sendMessage(manager.getMessage("no-active-session"));
             return;
         }
@@ -281,7 +299,7 @@ public class JoinMsgSessionHandler implements Listener {
         player.sendMessage(manager.getMessage("session-restarted"));
 
 
-        startSession(player);
+        startSession(player, session.getCorrelationId());
     }
 
 
@@ -295,6 +313,20 @@ public class JoinMsgSessionHandler implements Listener {
         return activeSessions.containsKey(playerId);
     }
 
+    private Map<String, Object> deliverItem(Player player, ItemStack item) {
+        int requestedAmount = item.getAmount();
+        Map<Integer, ItemStack> leftovers = player.getInventory().addItem(item);
+        int droppedAmount = 0;
+        for (ItemStack leftover : leftovers.values()) {
+            if (leftover == null || leftover.getAmount() <= 0) continue;
+            droppedAmount += leftover.getAmount();
+            player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+        }
+        int deliveredAmount = Math.max(0, requestedAmount - droppedAmount);
+        return Map.of("delivery_mode", droppedAmount > 0 ? "dropped" : "inventory",
+                "delivered_amount", deliveredAmount, "dropped_amount", droppedAmount);
+    }
+
 
     private enum SessionState {
         AWAITING_JOIN_MESSAGE,
@@ -305,17 +337,23 @@ public class JoinMsgSessionHandler implements Listener {
 
     private static class PlayerSession {
         private final Player player;
+        private final UUID correlationId;
         private SessionState state;
         private String joinMessage;
         private String quitMessage;
 
-        public PlayerSession(Player player) {
+        public PlayerSession(Player player, UUID correlationId) {
             this.player = player;
+            this.correlationId = correlationId;
             this.state = SessionState.AWAITING_JOIN_MESSAGE;
         }
 
         public Player getPlayer() {
             return player;
+        }
+
+        public UUID getCorrelationId() {
+            return correlationId;
         }
 
         public SessionState getState() {

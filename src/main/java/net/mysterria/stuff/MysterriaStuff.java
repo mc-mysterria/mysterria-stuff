@@ -1,5 +1,7 @@
 package net.mysterria.stuff;
 
+import net.mysterria.stuff.audit.StuffAuditEmitter;
+
 import de.skyslycer.hmcwraps.HMCWraps;
 import dev.ua.ikeepcalm.coi.api.CircleOfImaginationAPI;
 import net.mysterria.stuff.commands.MainCommand;
@@ -56,6 +58,7 @@ public final class MysterriaStuff extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        StuffAuditEmitter.initialize(this);
         instance = this;
 
 
@@ -247,6 +250,7 @@ public final class MysterriaStuff extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        StuffAuditEmitter.close();
 
         closeChatAliasIntegration();
 

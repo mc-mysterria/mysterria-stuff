@@ -9,6 +9,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.mysterria.stuff.features.hmcwraps.UniversalTokenManager;
+import net.mysterria.stuff.audit.StuffAuditEmitter;
 import net.mysterria.stuff.utils.AdventureUtil;
 import net.mysterria.stuff.utils.PrettyLogger;
 import org.bukkit.Material;
@@ -19,6 +20,9 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
 
 
 public class WrapConfirmationGUI {
@@ -116,12 +120,20 @@ public class WrapConfirmationGUI {
             return;
         }
 
+        UUID correlationId = StuffAuditEmitter.correlationId();
+
         if (!manager.consumeToken(heldItem, 1)) {
             player.sendMessage(manager.getMessage("no-token-in-hand"));
             return;
         }
 
+        StuffAuditEmitter.emit(manager.getPlugin(), "token.consumed", correlationId,
+                StuffAuditEmitter.tokenBusinessId("universal"), player.getUniqueId(),
+                player.getUniqueId(), null, "wrap_exchange",
+                StuffAuditEmitter.tokenMetadata("universal", 1, "wrap_exchange"));
+
         ItemStack wrapperItem;
+        String loaderWrapId;
         try {
             if (wrap.getPhysical() == null) {
                 player.sendMessage(Component.text("Error: This wrap has no physical item configured.", NamedTextColor.RED));
@@ -130,18 +142,14 @@ public class WrapConfirmationGUI {
 
 
                 ItemStack tokenRefund = manager.createToken(1);
-                if (player.getInventory().firstEmpty() == -1) {
-                    player.getWorld().dropItemNaturally(player.getLocation(), tokenRefund);
-                } else {
-                    player.getInventory().addItem(tokenRefund);
-                }
+                emitTokenRefund(player, tokenRefund, correlationId);
                 player.sendMessage(Component.text("Your token has been refunded.", NamedTextColor.GREEN));
                 return;
             }
             wrapperItem = wrap.getPhysical().toItem(hmcWraps, player);
 
 
-            addWrapperPDC(wrapperItem, wrap, hmcWraps);
+            loaderWrapId = addWrapperPDC(wrapperItem, wrap, hmcWraps);
         } catch (Exception e) {
             player.sendMessage(Component.text("Error: Failed to create wrap item.", NamedTextColor.RED));
             player.sendMessage(Component.text("Please contact staff about wrap: " + wrap.getWrapName(), NamedTextColor.YELLOW));
@@ -149,21 +157,30 @@ public class WrapConfirmationGUI {
 
 
             ItemStack tokenRefund = manager.createToken(1);
-            if (player.getInventory().firstEmpty() == -1) {
-                player.getWorld().dropItemNaturally(player.getLocation(), tokenRefund);
-            } else {
-                player.getInventory().addItem(tokenRefund);
-            }
+            emitTokenRefund(player, tokenRefund, correlationId);
             player.sendMessage(Component.text("Your token has been refunded.", NamedTextColor.GREEN));
             return;
         }
 
-        if (player.getInventory().firstEmpty() == -1) {
-            player.getWorld().dropItemNaturally(player.getLocation(), wrapperItem);
+        Map<String, Object> delivery = deliverItem(player, wrapperItem);
+        String deliveryMode = String.valueOf(delivery.get("delivery_mode"));
+        if ("dropped".equals(deliveryMode)) {
             player.sendMessage(Component.text("Inventory full! Wrapper dropped at your feet.", NamedTextColor.YELLOW));
-        } else {
-            player.getInventory().addItem(wrapperItem);
+        } else if ("partial".equals(deliveryMode)) {
+            player.sendMessage(Component.text("Inventory had limited space! "
+                    + delivery.get("delivered_amount") + " wrapper item(s) were added and "
+                    + delivery.get("dropped_amount") + " dropped at your feet.", NamedTextColor.YELLOW));
         }
+
+        String effectiveWrapId = resolveWrapId(wrap, loaderWrapId);
+        Map<String, Object> metadata = new LinkedHashMap<>(StuffAuditEmitter.wrapMetadata(
+                effectiveWrapId, wrap.getWrapName(), wrapperItem.getType().getKey().toString(),
+                wrapperItem.getAmount(), true));
+        metadata.put("delivery", "universal_token_exchange");
+        metadata.putAll(delivery);
+        StuffAuditEmitter.emit(manager.getPlugin(), "cosmetic.unlocked", correlationId,
+                StuffAuditEmitter.wrapBusinessId(effectiveWrapId, wrap.getWrapName()), player.getUniqueId(),
+                player.getUniqueId(), null, "universal_token_exchange", metadata);
 
         String wrapName = wrap.getName();
         player.sendMessage(manager.getMessage("wrap-exchanged", "wrap", AdventureUtil.convertMiniMessageToLegacy(wrapName)));
@@ -171,12 +188,44 @@ public class WrapConfirmationGUI {
         PrettyLogger.debug(player.getName() + " exchanged a token for wrap: " + wrapName);
     }
 
+    private void emitTokenRefund(Player player, ItemStack token, UUID correlationId) {
+        Map<String, Object> delivery = deliverItem(player, token);
+        Map<String, Object> metadata = new LinkedHashMap<>(StuffAuditEmitter.tokenMetadata("universal", 1, "wrap_exchange_refund"));
+        metadata.putAll(delivery);
+        StuffAuditEmitter.emit(manager.getPlugin(), "token.granted", correlationId,
+                StuffAuditEmitter.tokenBusinessId("universal"), player.getUniqueId(),
+                player.getUniqueId(), null, "wrap_exchange_refund",
+                metadata);
+    }
 
-    private void addWrapperPDC(ItemStack item, Wrap wrap, HMCWraps hmcWraps) {
+    private Map<String, Object> deliverItem(Player player, ItemStack item) {
+        int requestedAmount = item.getAmount();
+        Map<Integer, ItemStack> leftovers = player.getInventory().addItem(item);
+        int droppedAmount = 0;
+        for (ItemStack leftover : leftovers.values()) {
+            if (leftover == null || leftover.getAmount() <= 0) continue;
+            droppedAmount += leftover.getAmount();
+            player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+        }
+        int deliveredAmount = Math.max(0, requestedAmount - droppedAmount);
+        String deliveryMode = droppedAmount == 0 ? "inventory"
+                : deliveredAmount == 0 ? "dropped" : "partial";
+        return Map.of("delivery_mode", deliveryMode,
+                "delivered_amount", deliveredAmount, "dropped_amount", droppedAmount);
+    }
+
+    private String resolveWrapId(Wrap wrap, String loaderWrapId) {
+        String wrapId = wrap.getUuid();
+        if (wrapId == null || wrapId.isBlank()) wrapId = loaderWrapId;
+        if (wrapId == null || wrapId.isBlank()) wrapId = wrap.getWrapName();
+        return wrapId;
+    }
+
+    private String addWrapperPDC(ItemStack item, Wrap wrap, HMCWraps hmcWraps) {
         ItemMeta meta = item.getItemMeta();
         if (meta == null) {
             PrettyLogger.warn("Cannot add wrapper PDC - item meta is null for wrap: " + wrap.getWrapName());
-            return;
+            return null;
         }
 
         try {
@@ -190,7 +239,7 @@ public class WrapConfirmationGUI {
 
             if (wrapIdentifier == null) {
                 PrettyLogger.warn("Could not find wrap identifier for wrap: " + wrap.getWrapName());
-                return;
+                return null;
             }
 
             NamespacedKey key = new NamespacedKey("hmcwraps", "wrapper");
@@ -199,8 +248,10 @@ public class WrapConfirmationGUI {
             item.setItemMeta(meta);
 
             PrettyLogger.debug("Added wrapper PDC to item - Key: " + wrapIdentifier + " for wrap: " + wrap.getWrapName());
+            return wrapIdentifier;
         } catch (Exception e) {
             PrettyLogger.warn("Failed to add wrapper PDC for wrap '" + wrap.getWrapName() + "': " + e.getMessage());
+            return null;
         }
     }
 }
