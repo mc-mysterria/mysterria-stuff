@@ -48,7 +48,7 @@ public final class ZelChatAliasIntegration implements ChatAliasIntegration, Chat
     private final MysterriaStuff plugin;
     private final ModuleManager moduleManager;
     private volatile Map<String, ChatShortcut> aliases = defaultAliases();
-    private boolean registered;
+    private volatile boolean registered;
 
     private ZelChatAliasIntegration(MysterriaStuff plugin, ModuleManager moduleManager) {
         this.plugin = plugin;
@@ -102,6 +102,12 @@ public final class ZelChatAliasIntegration implements ChatAliasIntegration, Chat
 
         aliases = Collections.unmodifiableMap(reloaded);
         PrettyLogger.info("Loaded " + aliases.size() + " typed ZelChat chat shortcuts");
+    }
+
+    @Override
+    public boolean routesCohortShortcut(String message) {
+        ParsedShortcut parsed = parse(message);
+        return registered && parsed != null && parsed.shortcut() == ChatShortcut.COHORT;
     }
 
     @Override
