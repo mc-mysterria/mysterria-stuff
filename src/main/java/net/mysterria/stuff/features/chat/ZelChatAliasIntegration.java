@@ -250,6 +250,7 @@ public final class ZelChatAliasIntegration implements ChatAliasIntegration, Chat
         ORGANIZATION("organization", "oc", "<message>", "o", "oc", "org", "order"),
         // Circle of Imagination registers /coi lineage chat for Error families.
         LINEAGE("lineage", "coi lineage chat", "<message>", "lin", "lineage", "family"),
+        COHORT("cohort", "coi cohort chat", "<message>", "ch", "cohort"),
         LANDS("lands", "lands chat", "<message>", "l", "land", "lands"),
         NATIONS("nations", "nations chat", "<message>", "n", "nation", "nations"),
         // The deployed MythicDungeons plugin registers /p as its party-chat command.

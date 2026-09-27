@@ -89,6 +89,7 @@ chat-aliases:
     church: [c, cc, church]
     organization: [o, oc, org, order]
     lineage: [lin, lineage, family]
+    cohort: [ch, cohort]
     lands: [l, land, lands]
     nations: [n, nation, nations]
     party: [p, party, dp, dparty]
