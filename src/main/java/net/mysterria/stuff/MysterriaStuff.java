@@ -8,6 +8,7 @@ import net.mysterria.stuff.config.ConfigManager;
 import net.mysterria.stuff.features.battlepass.NetheriteElytraBlocker;
 import net.mysterria.stuff.features.coi.*;
 import net.mysterria.stuff.features.dungeons.DungeonWorldEnforcer;
+import net.mysterria.stuff.commands.OrganizationShortcutCommand;
 import net.mysterria.stuff.features.chat.ChatAliasIntegration;
 import net.mysterria.stuff.features.chat.ZelChatAliasIntegration;
 import net.mysterria.stuff.features.entities.CamelAiListener;
@@ -78,6 +79,9 @@ public final class MysterriaStuff extends JavaPlugin {
             Objects.requireNonNull(getServer().getPluginCommand("mysterriastuff")).setExecutor(new MainCommand());
             Objects.requireNonNull(getServer().getPluginCommand("mysterriastuff")).setTabCompleter(new MainCommandTabCompleter());
             PrettyLogger.debug("Registered main command with tab completion");
+        }
+        if (getServer().getPluginCommand("o") != null) {
+            getServer().getPluginCommand("o").setExecutor(new OrganizationShortcutCommand());
         }
 
 
