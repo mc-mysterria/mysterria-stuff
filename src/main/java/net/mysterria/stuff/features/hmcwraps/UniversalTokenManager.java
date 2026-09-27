@@ -5,6 +5,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.mysterria.stuff.MysterriaStuff;
 import net.mysterria.stuff.config.ConfigManager;
 import net.mysterria.stuff.utils.AdventureUtil;
+import net.mysterria.stuff.utils.TemporaryItemGuard;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
@@ -69,7 +70,7 @@ public class UniversalTokenManager {
 
 
     public boolean isToken(ItemStack item) {
-        if (item == null || item.getType() != Material.PAPER) {
+        if (item == null || item.getType() != Material.PAPER || TemporaryItemGuard.isTemporary(item)) {
             return false;
         }
 
@@ -83,7 +84,7 @@ public class UniversalTokenManager {
 
 
     public boolean consumeToken(ItemStack item, int amount) {
-        if (!isToken(item)) {
+        if (amount <= 0 || !isToken(item)) {
             return false;
         }
 
