@@ -13,6 +13,7 @@ import net.mysterria.stuff.features.joinmsg.JoinMsgStore;
 import net.mysterria.stuff.features.lastsprint.LastSprint;
 import net.mysterria.stuff.features.lastsprint.LastSprintGUI;
 import net.mysterria.stuff.features.hmcwraps.UniversalTokenManager;
+import net.mysterria.stuff.utils.ItemDelivery;
 import net.mysterria.stuff.utils.PrettyLogger;
 import net.mysterria.stuff.utils.StaticItems;
 import org.bukkit.Bukkit;
@@ -28,6 +29,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.List;
 
 
 public class MainCommand implements CommandExecutor {
@@ -164,13 +166,24 @@ public class MainCommand implements CommandExecutor {
             PrettyLogger.info("Reloaded HMCWraps category mappings");
         }
 
+        boolean joinMsgStoreLoaded = true;
         if (MysterriaStuff.getInstance().getJoinMsgStore() != null) {
-            MysterriaStuff.getInstance().getJoinMsgStore().load();
-            PrettyLogger.info("Reloaded join/quit message store");
+            joinMsgStoreLoaded = MysterriaStuff.getInstance().getJoinMsgStore().tryLoad();
+            if (joinMsgStoreLoaded) {
+                PrettyLogger.info("Reloaded join/quit message store");
+            } else {
+                PrettyLogger.warn("Join/quit message store failed to reload; it stays read-only until the file loads");
+            }
         }
 
-        sender.sendMessage(Component.text("MysterriaStuff reloaded successfully!")
-                .color(NamedTextColor.GREEN));
+        if (joinMsgStoreLoaded) {
+            sender.sendMessage(Component.text("MysterriaStuff reloaded successfully!")
+                    .color(NamedTextColor.GREEN));
+        } else {
+            sender.sendMessage(Component.text("MysterriaStuff reloaded, but the join/quit message store failed to load "
+                            + "and stays read-only until it does. Check console.")
+                    .color(NamedTextColor.RED));
+        }
         PrettyLogger.success("Plugin reloaded by " + sender.getName());
         return true;
     }
@@ -209,10 +222,9 @@ public class MainCommand implements CommandExecutor {
                     return true;
                 }
 
-                if (target.getInventory().firstEmpty() != -1) {
-                    target.getInventory().addItem(elytra);
-                } else {
-                    target.getWorld().dropItemNaturally(target.getLocation(), elytra);
+                ItemDelivery.Result delivery = ItemDelivery.deliverOrDropWhenFull(target, elytra);
+                if (reportUndelivered(sender, target, delivery, "reinforced elytra")) {
+                    return true;
                 }
 
                 sender.sendMessage(Component.text("Given ")
@@ -470,11 +482,9 @@ public class MainCommand implements CommandExecutor {
 
 
             ItemStack token = tokenManager.createToken(amount);
-
-            if (target.getInventory().firstEmpty() != -1) {
-                target.getInventory().addItem(token);
-            } else {
-                target.getWorld().dropItemNaturally(target.getLocation(), token);
+            ItemDelivery.Result delivery = ItemDelivery.deliver(target, token);
+            if (reportUndelivered(sender, target, delivery, "Universal Token(s)")) {
+                return true;
             }
 
 
@@ -543,11 +553,9 @@ public class MainCommand implements CommandExecutor {
 
 
         ItemStack token = manager.createToken(amount);
-
-        if (target.getInventory().firstEmpty() != -1) {
-            target.getInventory().addItem(token);
-        } else {
-            target.getWorld().dropItemNaturally(target.getLocation(), token);
+        ItemDelivery.Result delivery = ItemDelivery.deliver(target, token);
+        if (reportUndelivered(sender, target, delivery, "Join/Quit Message Token(s)")) {
+            return true;
         }
 
 
@@ -741,11 +749,16 @@ public class MainCommand implements CommandExecutor {
                     }
                 }
 
-                boolean changed = target != null
-                        ? store.removePlayerMessages(target, removeJoin, removeQuit)
-                        : store.removePendingMessages(args[2], removeJoin, removeQuit);
+                JoinMsgStore.RemoveResult removal = target != null
+                        ? store.tryRemovePlayerMessages(target, removeJoin, removeQuit)
+                        : store.tryRemovePendingMessages(args[2], removeJoin, removeQuit);
+                if (removal == JoinMsgStore.RemoveResult.WRITE_ERROR) {
+                    sender.sendMessage(Component.text("Failed to save the message store! Check console.")
+                            .color(NamedTextColor.RED));
+                    return true;
+                }
                 String label = target != null ? displayName(target) : args[2];
-                Component result = (changed
+                Component result = (removal == JoinMsgStore.RemoveResult.REMOVED
                         ? Component.text("Removed message(s) for ").color(NamedTextColor.GREEN)
                         : Component.text("No messages were set for ").color(NamedTextColor.GRAY))
                         .append(Component.text(label).color(NamedTextColor.AQUA))
@@ -788,14 +801,21 @@ public class MainCommand implements CommandExecutor {
                 return handleJoinMsgFirstJoin(sender, store, args);
             }
             case "reload" -> {
-                store.load();
+                if (!store.tryLoad()) {
+                    sender.sendMessage(Component.text("Reload failed; store is read-only until the file loads. Check console.")
+                            .color(NamedTextColor.RED));
+                    return true;
+                }
                 sender.sendMessage(Component.text("Join/quit message store reloaded from disk.")
                         .color(NamedTextColor.GREEN));
                 return true;
             }
             case "repair" -> {
                 int recovered = store.repairFromLegacyBackups();
-                if (recovered < 0) {
+                if (recovered == JoinMsgStore.REPAIR_SAVE_FAILED) {
+                    sender.sendMessage(Component.text("Failed to save the message store! Check console.")
+                            .color(NamedTextColor.RED));
+                } else if (recovered < 0) {
                     sender.sendMessage(Component.text("No join.rs.migrated/quit.rs.migrated backup files found — nothing to repair.")
                             .color(NamedTextColor.GRAY));
                 } else if (recovered == 0) {
@@ -853,13 +873,16 @@ public class MainCommand implements CommandExecutor {
             }
 
             String stored = message.replace("%player%", "{player}");
-            if (type.equals("join")) {
-                store.setDefaultJoinMessage(stored);
-            } else {
-                store.setDefaultQuitMessage(stored);
-            }
+            boolean saved = type.equals("join")
+                    ? store.setDefaultJoinMessage(stored)
+                    : store.setDefaultQuitMessage(stored);
 
-            sender.sendMessage(Component.text("Default " + type + " message updated.").color(NamedTextColor.GREEN));
+            if (saved) {
+                sender.sendMessage(Component.text("Default " + type + " message updated.").color(NamedTextColor.GREEN));
+            } else {
+                sender.sendMessage(Component.text("Failed to save the message store! Check console.")
+                        .color(NamedTextColor.RED));
+            }
             return true;
         }
 
@@ -890,9 +913,13 @@ public class MainCommand implements CommandExecutor {
             }
 
             String message = String.join(" ", Arrays.copyOfRange(args, 3, args.length)).replace("%player%", "{player}");
-            store.setFirstJoinMessage(message);
-            sender.sendMessage(Component.text("First-join message updated. (Uses MiniMessage tags, e.g. <gold>, not & codes.)")
-                    .color(NamedTextColor.GREEN));
+            if (store.setFirstJoinMessage(message)) {
+                sender.sendMessage(Component.text("First-join message updated. (Uses MiniMessage tags, e.g. <gold>, not & codes.)")
+                        .color(NamedTextColor.GREEN));
+            } else {
+                sender.sendMessage(Component.text("Failed to save the message store! Check console.")
+                        .color(NamedTextColor.RED));
+            }
             return true;
         }
 
@@ -903,6 +930,20 @@ public class MainCommand implements CommandExecutor {
 
     private String displayName(OfflinePlayer player) {
         return player.getName() != null ? player.getName() : player.getUniqueId().toString();
+    }
+
+    /**
+     * Tells staff when a grant did not fully reach the target (e.g. another plugin cancelled the drop).
+     *
+     * @return true if the delivery was incomplete and the caller must not report success
+     */
+    private boolean reportUndelivered(CommandSender sender, Player target, ItemDelivery.Result delivery,
+                                      String itemLabel) {
+        if (delivery.complete()) return false;
+        sender.sendMessage(Component.text(delivery.undeliveredAmount() + " of " + delivery.requestedAmount()
+                        + " " + itemLabel + " could not be delivered to " + target.getName() + "!")
+                .color(NamedTextColor.RED));
+        return true;
     }
 
     private boolean handleLastSprint(CommandSender sender, String[] args) {
@@ -959,8 +1000,20 @@ public class MainCommand implements CommandExecutor {
                             .color(NamedTextColor.RED));
                     return true;
                 }
-                lastSprint.giveRewards(target);
-                lastSprint.markGiftReceived(target.getUniqueId());
+                List<ItemStack> kit = lastSprint.getRewardItems();
+                // Flag before delivering so the first-join grant can never duplicate this kit.
+                if (!lastSprint.tryMarkGiftReceived(target.getUniqueId())) {
+                    PrettyLogger.warn("Last Sprint gift flag for " + target.getName()
+                            + " could not be saved; the kit was not delivered");
+                    sender.sendMessage(Component.text("Warning: the Last Sprint gift flag for " + target.getName()
+                                    + " could not be saved; the kit was not delivered.")
+                            .color(NamedTextColor.YELLOW));
+                    return true;
+                }
+                ItemDelivery.Result kitDelivery = lastSprint.giveRewards(target, kit);
+                if (reportUndelivered(sender, target, kitDelivery, "Last Sprint kit item(s)")) {
+                    return true;
+                }
                 sender.sendMessage(Component.text("Gave Last Sprint kit to ")
                         .color(NamedTextColor.GREEN)
                         .append(Component.text(target.getName()).color(NamedTextColor.AQUA))

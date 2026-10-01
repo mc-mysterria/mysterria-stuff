@@ -6,14 +6,17 @@ import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.title.Title;
 import net.mysterria.stuff.MysterriaStuff;
+import net.mysterria.stuff.utils.ItemDelivery;
 import net.mysterria.stuff.utils.PrettyLogger;
 import org.bukkit.Bukkit;
 import org.bukkit.Sound;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.inventory.ItemStack;
 
 import java.time.Duration;
+import java.util.List;
 
 public class LastSprintListener implements Listener {
 
@@ -38,9 +41,35 @@ public class LastSprintListener implements Listener {
         // Delay 1 tick so the player is fully initialized before receiving items
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
+            if (lastSprint.hasReceivedGift(player.getUniqueId())) return;
 
-            lastSprint.markGiftReceived(player.getUniqueId());
-            lastSprint.giveRewards(player);
+            List<ItemStack> kit = lastSprint.getRewardItems();
+            // Flag before delivering so a kit can never be granted twice: if delivery throws or is
+            // partial, the flag stays set and the shortfall is reported instead of re-sent on next join.
+            if (!lastSprint.tryMarkGiftReceived(player.getUniqueId())) {
+                PrettyLogger.warn("Last Sprint gift flag for " + player.getName()
+                        + " could not be saved; the kit was not delivered");
+                return;
+            }
+            ItemDelivery.Result delivery;
+            try {
+                delivery = lastSprint.giveRewards(player, kit);
+            } catch (RuntimeException e) {
+                player.sendMessage(Component.text("Your Last Sprint starter kit could not be delivered. Please contact staff.")
+                        .color(NamedTextColor.RED));
+                PrettyLogger.warn("Last Sprint kit delivery to " + player.getName() + " failed: " + e.getMessage());
+                throw e;
+            }
+
+            if (!delivery.complete()) {
+                player.sendMessage(Component.text(delivery.anyDelivered()
+                                ? "Part of your Last Sprint starter kit could not be delivered. Please contact staff."
+                                : "Your Last Sprint starter kit could not be delivered. Please contact staff.")
+                        .color(NamedTextColor.RED));
+                PrettyLogger.warn("Last Sprint kit for " + player.getName() + " was not fully delivered ("
+                        + delivery.undeliveredAmount() + " of " + delivery.requestedAmount() + " item(s) undelivered)");
+                return;
+            }
 
             player.showTitle(Title.title(
                     Component.text("Welcome to Mysterria!").color(ACCENT)

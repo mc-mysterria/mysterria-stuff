@@ -1,6 +1,7 @@
 package net.mysterria.stuff.features.lastsprint;
 
 import net.mysterria.stuff.MysterriaStuff;
+import net.mysterria.stuff.utils.ItemDelivery;
 import net.mysterria.stuff.utils.PrettyLogger;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -58,7 +59,7 @@ public class LastSprint {
         PrettyLogger.debug("Last Sprint: " + giftedPlayers.size() + " gifted players, " + rewardItems.size() + " reward items");
     }
 
-    private void save() {
+    private boolean save() {
         data.set("gifted-players", giftedPlayers.stream().map(UUID::toString).toList());
 
         List<String> encoded = new ArrayList<>();
@@ -73,8 +74,10 @@ public class LastSprint {
 
         try {
             data.save(dataFile);
+            return true;
         } catch (IOException e) {
             PrettyLogger.error("Failed to save lastsprint_data.yml: " + e.getMessage());
+            return false;
         }
     }
 
@@ -83,8 +86,25 @@ public class LastSprint {
     }
 
     public void markGiftReceived(UUID uuid) {
-        giftedPlayers.add(uuid);
-        save();
+        tryMarkGiftReceived(uuid);
+    }
+
+    /**
+     * Flags the player as gifted and persists the flag.
+     *
+     * @return false if the flag could not be saved; callers must not deliver the kit in that case
+     */
+    public boolean tryMarkGiftReceived(UUID uuid) {
+        boolean added = giftedPlayers.add(uuid);
+        boolean saved = false;
+        try {
+            saved = save();
+            return saved;
+        } finally {
+            // Callers skip delivery when the flag is not persisted, so drop a flag this call added
+            // rather than suppress the undelivered kit. A previously saved flag is left untouched.
+            if (!saved && added) giftedPlayers.remove(uuid);
+        }
     }
 
     public void unmarkGiftReceived(UUID uuid) {
@@ -112,12 +132,11 @@ public class LastSprint {
     }
 
     public void giveRewards(Player player) {
-        for (ItemStack reward : getRewardItems()) {
-            if (player.getInventory().firstEmpty() != -1) {
-                player.getInventory().addItem(reward);
-            } else {
-                player.getWorld().dropItemNaturally(player.getLocation(), reward);
-            }
-        }
+        giveRewards(player, getRewardItems());
+    }
+
+    /** Delivers a snapshot of the reward kit (see {@link #getRewardItems()}) to the player. */
+    public ItemDelivery.Result giveRewards(Player player, List<ItemStack> kit) {
+        return ItemDelivery.deliverAll(player, kit);
     }
 }

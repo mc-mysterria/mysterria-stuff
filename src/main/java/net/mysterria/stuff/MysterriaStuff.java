@@ -8,6 +8,7 @@ import net.mysterria.stuff.config.ConfigManager;
 import net.mysterria.stuff.features.battlepass.NetheriteElytraBlocker;
 import net.mysterria.stuff.features.coi.*;
 import net.mysterria.stuff.features.dungeons.DungeonWorldEnforcer;
+import net.mysterria.stuff.commands.OrganizationShortcutCommand;
 import net.mysterria.stuff.features.chat.ChatAliasIntegration;
 import net.mysterria.stuff.features.chat.ZelChatAliasIntegration;
 import net.mysterria.stuff.features.entities.CamelAiListener;
@@ -47,7 +48,7 @@ public final class MysterriaStuff extends JavaPlugin {
     private CoiZoneManager coiZoneManager;
     private LastSprint lastSprint;
     private LastSprintGUI lastSprintGUI;
-    private ChatAliasIntegration chatAliasIntegration;
+    private volatile ChatAliasIntegration chatAliasIntegration;
     private boolean chatAliasRegistrationQueued;
 
     public static MysterriaStuff getInstance() {
@@ -78,6 +79,9 @@ public final class MysterriaStuff extends JavaPlugin {
             Objects.requireNonNull(getServer().getPluginCommand("mysterriastuff")).setExecutor(new MainCommand());
             Objects.requireNonNull(getServer().getPluginCommand("mysterriastuff")).setTabCompleter(new MainCommandTabCompleter());
             PrettyLogger.debug("Registered main command with tab completion");
+        }
+        if (getServer().getPluginCommand("o") != null) {
+            getServer().getPluginCommand("o").setExecutor(new OrganizationShortcutCommand());
         }
 
 
@@ -120,7 +124,7 @@ public final class MysterriaStuff extends JavaPlugin {
 
         if (configManager.isBoosterPatriarchEnabled()) {
             loadCoiApi();
-            BoosterPatriarchListener boosterPatriarchListener = new BoosterPatriarchListener(this);
+            boosterPatriarchListener = new BoosterPatriarchListener(this);
             getServer().getPluginManager().registerEvents(boosterPatriarchListener, this);
             PrettyLogger.feature("CoI Booster Patriarch System");
         }
@@ -306,6 +310,12 @@ public final class MysterriaStuff extends JavaPlugin {
 
     public BoosterPatriarchListener getBoosterPatriarchListener() {
         return boosterPatriarchListener;
+    }
+
+    /** Optional handshake for COI's raw-chat privacy guard, including configured aliases. */
+    public boolean routesCohortShortcut(String message) {
+        ChatAliasIntegration integration = chatAliasIntegration;
+        return isEnabled() && integration != null && integration.routesCohortShortcut(message);
     }
 
     public void reloadChatAliasIntegration() {
