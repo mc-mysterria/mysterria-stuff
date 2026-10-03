@@ -15,8 +15,6 @@ final class ReflectiveReader {
     private final BoundedMap<Lookup, Optional<Method>> methods = new BoundedMap<>(MAX_CACHED_LOOKUPS);
 
     /**
-     * Invokes {@code getter} on {@code target}; null when the target is null.
-     *
      * @throws NoSuchMethodException when the target's class has no such public getter
      * @throws ReflectiveOperationException when the getter cannot be invoked or itself throws
      */
@@ -42,7 +40,6 @@ final class ReflectiveReader {
         return type.isInstance(value) ? type.cast(value) : null;
     }
 
-    /** Typed {@link #readOptional}. */
     <T> T readOptional(Object target, String getter, Class<T> type) throws ReflectiveOperationException {
         Object value = readOptional(target, getter);
         return type.isInstance(value) ? type.cast(value) : null;

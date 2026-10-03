@@ -85,7 +85,6 @@ public class JoinMsgTokenManager {
     }
 
 
-    /** The PDC key that marks {@code item} as a join-message token, or null if it is not one. */
     public String tokenMarker(ItemStack item) {
         if (!isToken(item)) return null;
         return item.getItemMeta().getPersistentDataContainer().has(tokenKey, PersistentDataType.BYTE)

@@ -40,14 +40,6 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
     compileOnly("it.pino.zelchat:zelchat-api:2.0.0-pre-27")
     implementation 'dev.ua.ikeepcalm.mysterria:audit-client:1.0.0'
-
-    testImplementation(platform("org.junit:junit-bom:5.13.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
-
-test {
-    useJUnitPlatform()
 }
 
 jar {

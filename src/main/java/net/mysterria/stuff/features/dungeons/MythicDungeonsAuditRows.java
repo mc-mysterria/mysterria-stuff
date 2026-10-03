@@ -39,8 +39,6 @@ final class MythicDungeonsAuditRows {
         this.clock = clock;
     }
 
-    // ---- party rows -------------------------------------------------------------------------
-
     void partyCreated(Object event) throws ReflectiveOperationException {
         Object party = reader.read(event, "getParty");
         Player leader = playerOf(reader.read(event, "getHostPlayer"));
@@ -106,9 +104,8 @@ final class MythicDungeonsAuditRows {
     }
 
     /**
-     * Async: MythicDungeons fires this from its async scheduler. Only plain values are read (the
-     * party object reference, the message string and the tracker's cached member count); the
-     * sender is not exposed by the event, so the row carries no actor.
+     * Async: only plain values are read (the party reference, the message and the tracker's cached
+     * member count). The event does not expose the sender, so the row carries no actor.
      */
     void partyChat(Object event) throws ReflectiveOperationException {
         Object party = reader.read(event, "getParty");
@@ -124,8 +121,6 @@ final class MythicDungeonsAuditRows {
         StuffAuditEmitter.emitObserved(AuditRisk.LOW, AuditPrivacy.CHAT_CONTENT, "party.chat",
                 state.id(), partyBusinessId(state.id()), null, null, null, values);
     }
-
-    // ---- dungeon rows -----------------------------------------------------------------------
 
     void dungeonStarted(Object event) throws ReflectiveOperationException {
         Object instance = reader.read(event, "getInstance");
@@ -194,9 +189,6 @@ final class MythicDungeonsAuditRows {
         emitDungeon("dungeon.loot_generated", AuditRisk.NORMAL, instanceId, partyId, uuid(player), values);
     }
 
-    // ---- shared reads -----------------------------------------------------------------------
-
-    /** Tracked party state; derives and records an id the first time a party object is seen. */
     PartyState partyState(Object party, UUID leaderId, String source) throws ReflectiveOperationException {
         if (party == null) return null;
         PartyState known = parties.lookup(party);
@@ -270,8 +262,6 @@ final class MythicDungeonsAuditRows {
         return player == null ? null : player.getUniqueId();
     }
 
-    // ---- metadata ---------------------------------------------------------------------------
-
     private static Map<String, Object> partyValues(PartyState state) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("party_id", state.id().toString());
@@ -326,8 +316,6 @@ final class MythicDungeonsAuditRows {
         values.put(countKey, ids.size());
         if (ids.size() > MAX_LISTED_UUIDS) values.put(listKey + "_truncated", true);
     }
-
-    // ---- emission ---------------------------------------------------------------------------
 
     static String partyBusinessId(UUID partyId) {
         return "party:" + partyId;

@@ -27,9 +27,6 @@ public final class ItemDelivery {
     private ItemDelivery() {
     }
 
-    /**
-     * @param itemUuids circleofimagination:item_uuid values carried by the delivered stacks
-     */
     public record Result(int requestedAmount, int deliveredAmount, int droppedAmount,
                          int undeliveredAmount, List<String> itemUuids) {
 
@@ -76,10 +73,6 @@ public final class ItemDelivery {
             return values;
         }
 
-        /**
-         * Identity metadata: top-level item_uuid when exactly one identified item was delivered,
-         * otherwise item_uuids (comma separated) plus item_uuid_count.
-         */
         public Map<String, Object> identityMetadata() {
             Map<String, Object> values = new LinkedHashMap<>();
             if (itemUuids.size() == 1) {

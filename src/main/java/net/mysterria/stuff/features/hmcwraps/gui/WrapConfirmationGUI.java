@@ -245,7 +245,6 @@ public class WrapConfirmationGUI {
         return metadata;
     }
 
-    /** Wrapper creation failed after the token was consumed: existing error text, FAILED row, refund. */
     private void abortCreation(Player player, Wrap wrap, UUID correlationId, String tokenUuid, String reason) {
         player.sendMessage(Component.text("Error: Failed to create wrap item.", NamedTextColor.RED));
         player.sendMessage(Component.text("Please contact staff about wrap: " + wrap.getWrapName(), NamedTextColor.YELLOW));
@@ -267,11 +266,7 @@ public class WrapConfirmationGUI {
         }
     }
 
-    /**
-     * A wrap preview that cannot load is not an exchange attempt, so it never produces a
-     * cosmetic.unlocked FAILED row. It is traced as a low-risk observation instead: at most one
-     * row per player per wrap per {@link #PREVIEW_UNAVAILABLE_WINDOW_MS}.
-     */
+    /** A preview is not an exchange attempt, so it is traced as OBSERVED LOW, not a FAILED unlock. */
     private void emitPreviewUnavailable(Player player, Wrap wrap, String reason) {
         long now = System.currentTimeMillis();
         String key = player.getUniqueId() + "|" + wrap.getWrapName();

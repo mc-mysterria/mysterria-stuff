@@ -66,11 +66,7 @@ public final class StuffAuditEmitter {
         }
     }
 
-    /**
-     * Auditing is optional. This method only enqueues an immutable emission on
-     * the provider's side and never gates gameplay or the local store. Callers
-     * must only use this after the state change has been applied and persisted.
-     */
+    /** Call only after the state change has been applied and persisted. */
     public static void emit(String operation,
                             UUID correlationId, String businessId,
                             UUID actorId, UUID subjectId, UUID targetId, String reason,
@@ -98,7 +94,6 @@ public final class StuffAuditEmitter {
         emitFailed(operation, correlationId, businessId, actorId, subjectId, null, reason, metadata);
     }
 
-    /** Records a delivery that threw before any outcome could be determined. */
     public static void emitDeliveryException(String operation, UUID correlationId, String businessId,
                                              UUID actorId, UUID subjectId, String reason,
                                              Map<String, Object> values, Throwable failure) {
@@ -108,7 +103,6 @@ public final class StuffAuditEmitter {
         emitFailed(operation, correlationId, businessId, actorId, subjectId, null, reason, metadata);
     }
 
-    /** Records an operation that was attempted but did not take effect. */
     public static void emitFailed(String operation,
                                   UUID correlationId, String businessId,
                                   UUID actorId, UUID subjectId, UUID targetId, String reason,
@@ -117,7 +111,6 @@ public final class StuffAuditEmitter {
                 targetId, reason, values);
     }
 
-    /** Records a low-risk observation that is neither an attempt nor a state change. */
     public static void emitObservedLow(String operation,
                                        UUID correlationId, String businessId,
                                        UUID actorId, UUID subjectId, String reason,
@@ -126,10 +119,7 @@ public final class StuffAuditEmitter {
                 subjectId, null, reason, values);
     }
 
-    /**
-     * Records an observation with an explicit risk and privacy class. Safe to call from any
-     * thread: it only reads the given plain values and enqueues on the producer's bounded queue.
-     */
+    /** Safe from any thread: it only reads the given plain values and enqueues on a bounded queue. */
     public static void emitObserved(AuditRisk risk, AuditPrivacy privacy, String operation,
                                     UUID correlationId, String businessId,
                                     UUID actorId, UUID subjectId, String reason,
@@ -184,12 +174,10 @@ public final class StuffAuditEmitter {
         }
     }
 
-    /** Actor UUID for a command sender; null for console and other non-player senders. */
     public static UUID actorId(CommandSender sender) {
         return sender instanceof Player player ? player.getUniqueId() : null;
     }
 
-    /** Position metadata (world, x, y, z) for a player; empty when the player is absent. */
     public static Map<String, Object> location(Player player) {
         Map<String, Object> values = new LinkedHashMap<>();
         if (player == null) return values;
@@ -201,10 +189,7 @@ public final class StuffAuditEmitter {
         return values;
     }
 
-    /**
-     * Position metadata (world, x, y, z) for a location; empty when absent or when its world
-     * has been unloaded (a dungeon instance world can be gone by the time an end event fires).
-     */
+    /** Empty when the world has been unloaded: a dungeon instance world can be gone by the time an end event fires. */
     public static Map<String, Object> location(Location location) {
         Map<String, Object> values = new LinkedHashMap<>();
         if (location == null) return values;
@@ -219,13 +204,11 @@ public final class StuffAuditEmitter {
         return values;
     }
 
-    /** Lowercase hex SHA-256 of the given text, for fingerprinting content without storing it. */
     public static String sha256(String text) {
         if (text == null) return null;
         return sha256(text.getBytes(StandardCharsets.UTF_8));
     }
 
-    /** Lowercase hex SHA-256 of the given bytes. */
     public static String sha256(byte[] bytes) {
         if (bytes == null) return null;
         try {

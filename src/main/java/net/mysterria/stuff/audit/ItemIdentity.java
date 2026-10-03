@@ -12,16 +12,10 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Stamps and reads the shared CoI item-identity PDC keys without depending on CoI.
- *
- * <p>Only non-stackable single items (max stack size 1, amount 1) are ever stamped. CoI treats
- * {@code circleofimagination:item_uuid} as a per-instance unique id and its dupe scan flags any uuid
- * whose summed amount exceeds 1, and a per-instance PDC value would also stop otherwise identical
- * items from stacking. Fungible, stackable items such as tokens are therefore never stamped. They
- * are identified per lot instead: {@link #lotMetadata} mints one {@code item_uuid} per granted stack
- * and writes it to the audit row only (with {@code item_mint_qty}, {@code item_origin} and
- * {@code item_minted_by}), leaving the item PDC identical across grants so separately granted
- * stacks keep stacking exactly as they did before auditing was added.
+ * Only non-stackable single items (max stack size 1, amount 1) are ever stamped: CoI's dupe scan
+ * flags any {@code circleofimagination:item_uuid} whose summed amount exceeds 1, and a per-instance
+ * PDC value would stop identical items from stacking. Fungible items such as tokens are identified
+ * per lot instead ({@link #lotMetadata}), in the audit row only.
  */
 public final class ItemIdentity {
 
@@ -41,11 +35,7 @@ public final class ItemIdentity {
     private ItemIdentity() {
     }
 
-    /**
-     * Stamps a fresh item_uuid plus origin, and optionally minted_by / parent.
-     *
-     * @return the stamped item UUID, or null if the item is stackable or has no meta
-     */
+    /** @return the stamped item UUID, or null if the item is stackable or has no meta */
     public static String stamp(ItemStack item, String origin, String mintedBy, String parentUuid) {
         if (!isUniqueInstance(item)) return null;
         ItemMeta meta = item.getItemMeta();
@@ -87,12 +77,8 @@ public final class ItemIdentity {
     }
 
     /**
-     * Identity fields for a token about to be consumed; call before the stack is decremented.
-     * A stamped token yields its instance {@code item_uuid}. Tokens are never stamped (see class
-     * doc), so the usual case is a fingerprint instead: {@code token_marker} (the PDC key that
-     * identified the token), {@code material}, {@code display_name_sha256} (plain text) and
-     * {@code item_sha256} (serialized bytes of a one-item copy, so the hash does not depend on how
-     * many tokens were in the stack).
+     * Call before the stack is decremented. {@code item_sha256} hashes a one-item copy so it does
+     * not depend on how many tokens were in the stack.
      */
     public static Map<String, Object> consumedTokenIdentity(ItemStack item, String tokenMarker) {
         Map<String, Object> metadata = new LinkedHashMap<>();

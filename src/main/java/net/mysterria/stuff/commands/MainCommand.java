@@ -981,13 +981,11 @@ public class MainCommand implements CommandExecutor {
                 "admin_mutation", metadata, committed);
     }
 
-    /** COMMITTED when the store write succeeded, FAILED (failure=write_error) otherwise. */
     private void emitAdminOutcome(CommandSender sender, String operation, String businessId,
                                   UUID subjectId, String reason, Map<String, Object> metadata,
                                   boolean committed) {
         UUID actorId = StuffAuditEmitter.actorId(sender);
         if (!metadata.containsKey("world") && sender instanceof Player actor) {
-            // No online subject to locate: fall back to the admin actor's position.
             metadata.put("location_source", "actor");
             metadata.putAll(StuffAuditEmitter.location(actor));
         }
@@ -1040,7 +1038,6 @@ public class MainCommand implements CommandExecutor {
         return delivery;
     }
 
-    /** Delivers a staff item grant (elytra); a thrown delivery records a FAILED row and is rethrown unchanged. */
     private ItemDelivery.Result deliverStaffGrant(CommandSender sender, Player target, ItemStack item,
                                                   String operation, String businessId, String grantType,
                                                   Map<String, Object> extra) {

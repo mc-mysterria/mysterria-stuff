@@ -22,7 +22,6 @@ final class PartyTracker {
         this.parties = new BoundedMap<>(capacity);
     }
 
-    /** Party id derived from the leader and the creation time, for parties with no exposed UUID. */
     static UUID derive(UUID leader, long createdMillis) {
         String seed = "mythicdungeons-party:" + leader + ":" + createdMillis;
         return UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8));
@@ -38,7 +37,6 @@ final class PartyTracker {
         return party == null ? null : parties.get(new IdentityKey(party));
     }
 
-    /** Returns the tracked state, or records a new one with the given id and source. */
     PartyState track(Object party, UUID id, String source) {
         if (party == null || id == null) return null;
         return parties.computeIfAbsent(new IdentityKey(party), key -> new PartyState(id, source));
