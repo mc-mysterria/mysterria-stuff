@@ -45,10 +45,18 @@ public class JoinMsgStore {
         WRITE_ERROR
     }
 
-    public enum RemoveResult {
-        REMOVED,
-        NOTHING_REMOVED,
-        WRITE_ERROR
+    public record RemoveResult(boolean changed, boolean saved,
+                               boolean removedJoin, boolean removedQuit) {
+        public static RemoveResult unchanged() {
+            return new RemoveResult(false, true, false, false);
+        }
+
+        public String messageType() {
+            if (removedJoin && removedQuit) return "join_and_quit";
+            if (removedJoin) return "join";
+            if (removedQuit) return "quit";
+            return "unknown";
+        }
     }
 
     public static class MessageEntry {
@@ -223,7 +231,11 @@ public class JoinMsgStore {
 
     public boolean save() {
         if (loadFailed) {
-            PrettyLogger.warn("Refusing to save join/quit message store: the file on disk failed to load");
+            try {
+                PrettyLogger.warn("Refusing to save join/quit message store: the file on disk failed to load");
+            } catch (RuntimeException ignored) {
+                // Callers still need a false result so they can restore their snapshots.
+            }
             return false;
         }
         return writeState(new StoreState(byUuid, pending, defaultJoinMessage, defaultQuitMessage, firstJoinMessage));
@@ -257,7 +269,11 @@ public class JoinMsgStore {
             writeAtomically(yaml);
             return true;
         } catch (IOException | RuntimeException e) {
-            PrettyLogger.warn("Failed to save join/quit message store: " + e.getMessage());
+            try {
+                PrettyLogger.warn("Failed to save join/quit message store: " + e.getMessage());
+            } catch (RuntimeException ignored) {
+                // Callers still need a false result so they can restore their snapshots.
+            }
             return false;
         }
     }
@@ -616,7 +632,8 @@ public class JoinMsgStore {
     }
 
     public boolean removePlayerMessages(OfflinePlayer target, boolean removeJoin, boolean removeQuit) {
-        return tryRemovePlayerMessages(target, removeJoin, removeQuit) == RemoveResult.REMOVED;
+        RemoveResult result = tryRemovePlayerMessages(target, removeJoin, removeQuit);
+        return result.changed() && result.saved();
     }
 
     /** Like {@link #removePlayerMessages}, but reports a failed save (rolled back) separately from no-op. */
@@ -649,12 +666,12 @@ public class JoinMsgStore {
             }
         }
 
-        if (!removedJoin && !removedQuit) return RemoveResult.NOTHING_REMOVED;
-        if (save()) return RemoveResult.REMOVED;
+        if (!removedJoin && !removedQuit) return RemoveResult.unchanged();
+        if (save()) return new RemoveResult(true, true, removedJoin, removedQuit);
 
         restoreEntry(byUuid, uuid, previousPlayer);
         if (pendingKey != null) restoreEntry(pending, pendingKey, previousPending);
-        return RemoveResult.WRITE_ERROR;
+        return new RemoveResult(true, false, removedJoin, removedQuit);
     }
 
     public MessageEntry getEntry(OfflinePlayer target) {
@@ -703,7 +720,8 @@ public class JoinMsgStore {
     }
 
     public boolean removePendingMessages(String name, boolean removeJoin, boolean removeQuit) {
-        return tryRemovePendingMessages(name, removeJoin, removeQuit) == RemoveResult.REMOVED;
+        RemoveResult result = tryRemovePendingMessages(name, removeJoin, removeQuit);
+        return result.changed() && result.saved();
     }
 
     /** Like {@link #removePendingMessages}, but reports a failed save (rolled back) separately from no-op. */
@@ -711,7 +729,7 @@ public class JoinMsgStore {
         String key = sanitizeKey(name);
         MessageEntry previous = copyEntry(pending.get(key));
         MessageEntry entry = pending.get(key);
-        if (entry == null) return RemoveResult.NOTHING_REMOVED;
+        if (entry == null) return RemoveResult.unchanged();
 
         boolean removedJoin = removeJoin && entry.join != null;
         boolean removedQuit = removeQuit && entry.quit != null;
@@ -721,11 +739,11 @@ public class JoinMsgStore {
             pending.remove(key);
         }
 
-        if (!removedJoin && !removedQuit) return RemoveResult.NOTHING_REMOVED;
-        if (save()) return RemoveResult.REMOVED;
+        if (!removedJoin && !removedQuit) return RemoveResult.unchanged();
+        if (save()) return new RemoveResult(true, true, removedJoin, removedQuit);
 
         restoreEntry(pending, key, previous);
-        return RemoveResult.WRITE_ERROR;
+        return new RemoveResult(true, false, removedJoin, removedQuit);
     }
 
     public List<MessageEntry> listEntries() {

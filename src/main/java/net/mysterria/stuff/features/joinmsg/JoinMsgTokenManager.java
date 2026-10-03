@@ -85,6 +85,12 @@ public class JoinMsgTokenManager {
     }
 
 
+    public String tokenMarker(ItemStack item) {
+        if (!isToken(item)) return null;
+        return item.getItemMeta().getPersistentDataContainer().has(tokenKey, PersistentDataType.BYTE)
+                ? tokenKey.toString() : legacyTokenKey.toString();
+    }
+
     public boolean consumeToken(ItemStack item, int amount) {
         if (amount <= 0 || !isToken(item)) {
             return false;

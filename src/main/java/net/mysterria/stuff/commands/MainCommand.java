@@ -6,6 +6,8 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.mysterria.stuff.MysterriaStuff;
+import net.mysterria.stuff.audit.ItemIdentity;
+import net.mysterria.stuff.audit.StuffAuditEmitter;
 import net.mysterria.stuff.features.joinmsg.JoinMsgTokenManager;
 import net.mysterria.stuff.features.coi.BoosterPatriarchListener;
 import net.mysterria.stuff.features.joinmsg.JoinMsgSessionHandler;
@@ -29,7 +31,10 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 
 public class MainCommand implements CommandExecutor {
@@ -217,12 +222,17 @@ public class MainCommand implements CommandExecutor {
             case "elytra" -> {
                 ItemStack elytra = getElytra();
                 if (elytra == null) {
+                    emitStaffItemGrantFailed(sender, target, "item.granted", "item:reinforced_elytra",
+                            "reinforced_elytra", 1, "item_creation_failed", null);
                     sender.sendMessage(Component.text("Failed to create elytra item!")
                             .color(NamedTextColor.RED));
                     return true;
                 }
 
-                ItemDelivery.Result delivery = ItemDelivery.deliverOrDropWhenFull(target, elytra);
+                ItemDelivery.Result delivery = deliverStaffGrant(sender, target, elytra, "item.granted",
+                        "item:reinforced_elytra", "reinforced_elytra", null);
+                emitStaffItemGrant(sender, target, "item.granted", "item:reinforced_elytra",
+                        "reinforced_elytra", delivery, null);
                 if (reportUndelivered(sender, target, delivery, "reinforced elytra")) {
                     return true;
                 }
@@ -232,7 +242,7 @@ public class MainCommand implements CommandExecutor {
                         .append(Component.text(playerName).color(NamedTextColor.AQUA))
                         .append(Component.text(" a reinforced elytra!").color(NamedTextColor.GREEN)));
 
-                PrettyLogger.info("Gave " + playerName + " a reinforced elytra (by " + sender.getName() + ")");
+                PrettyLogger.debug("Gave " + playerName + " a reinforced elytra (by " + sender.getName() + ")");
                 return true;
             }
             default -> {
@@ -482,7 +492,7 @@ public class MainCommand implements CommandExecutor {
 
 
             ItemStack token = tokenManager.createToken(amount);
-            ItemDelivery.Result delivery = ItemDelivery.deliver(target, token);
+            ItemDelivery.Result delivery = giveStaffToken(sender, target, token, "universal", amount);
             if (reportUndelivered(sender, target, delivery, "Universal Token(s)")) {
                 return true;
             }
@@ -495,7 +505,7 @@ public class MainCommand implements CommandExecutor {
                     .append(Component.text(playerName).color(NamedTextColor.AQUA))
                     .append(Component.text(" " + amount + " Universal Token(s)!").color(NamedTextColor.GREEN)));
 
-            PrettyLogger.info("Gave " + playerName + " " + amount + " Universal Token(s) (by " + sender.getName() + ")");
+            PrettyLogger.debug("Gave " + playerName + " " + amount + " Universal Token(s) (by " + sender.getName() + ")");
             return true;
         }
         sender.sendMessage(Component.text("Unknown token subcommand!")
@@ -553,7 +563,7 @@ public class MainCommand implements CommandExecutor {
 
 
         ItemStack token = manager.createToken(amount);
-        ItemDelivery.Result delivery = ItemDelivery.deliver(target, token);
+        ItemDelivery.Result delivery = giveStaffToken(sender, target, token, "joinmsg", amount);
         if (reportUndelivered(sender, target, delivery, "Join/Quit Message Token(s)")) {
             return true;
         }
@@ -566,7 +576,7 @@ public class MainCommand implements CommandExecutor {
                 .append(Component.text(playerName).color(NamedTextColor.AQUA))
                 .append(Component.text(" " + amount + " Join/Quit Message Token(s)!").color(NamedTextColor.GREEN)));
 
-        PrettyLogger.info("Gave " + playerName + " " + amount + " Join/Quit Message Token(s) (by " + sender.getName() + ")");
+        PrettyLogger.debug("Gave " + playerName + " " + amount + " Join/Quit Message Token(s) (by " + sender.getName() + ")");
         return true;
     }
 
@@ -696,6 +706,12 @@ public class MainCommand implements CommandExecutor {
                     case WRITE_ERROR -> sender.sendMessage(
                             Component.text("Failed to save the message store! Check console.").color(NamedTextColor.RED));
                 }
+                if (result == JoinMsgStore.SetResult.OK || result == JoinMsgStore.SetResult.WRITE_ERROR) {
+                    Map<String, Object> extra = new LinkedHashMap<>();
+                    extra.put("message_sha256", StuffAuditEmitter.sha256(message));
+                    emitJoinMsgAdmin(sender, "message_set", target, args[2], type, extra,
+                            result == JoinMsgStore.SetResult.OK);
+                }
                 return true;
             }
             case "get" -> {
@@ -752,18 +768,22 @@ public class MainCommand implements CommandExecutor {
                 JoinMsgStore.RemoveResult removal = target != null
                         ? store.tryRemovePlayerMessages(target, removeJoin, removeQuit)
                         : store.tryRemovePendingMessages(args[2], removeJoin, removeQuit);
-                if (removal == JoinMsgStore.RemoveResult.WRITE_ERROR) {
+                String label = target != null ? displayName(target) : args[2];
+                if (removal.changed() && !removal.saved()) {
                     sender.sendMessage(Component.text("Failed to save the message store! Check console.")
                             .color(NamedTextColor.RED));
-                    return true;
+                } else {
+                    Component result = (removal.changed()
+                            ? Component.text("Removed message(s) for ").color(NamedTextColor.GREEN)
+                            : Component.text("No messages were set for ").color(NamedTextColor.GRAY))
+                            .append(Component.text(label).color(NamedTextColor.AQUA))
+                            .append(Component.text("."));
+                    sender.sendMessage(result);
                 }
-                String label = target != null ? displayName(target) : args[2];
-                Component result = (removal == JoinMsgStore.RemoveResult.REMOVED
-                        ? Component.text("Removed message(s) for ").color(NamedTextColor.GREEN)
-                        : Component.text("No messages were set for ").color(NamedTextColor.GRAY))
-                        .append(Component.text(label).color(NamedTextColor.AQUA))
-                        .append(Component.text("."));
-                sender.sendMessage(result);
+                if (removal.changed()) {
+                    emitJoinMsgAdmin(sender, "message_removed", target, args[2],
+                            removal.messageType(), new LinkedHashMap<>(), removal.saved());
+                }
                 return true;
             }
             case "list" -> {
@@ -877,8 +897,14 @@ public class MainCommand implements CommandExecutor {
                     ? store.setDefaultJoinMessage(stored)
                     : store.setDefaultQuitMessage(stored);
 
+            Map<String, Object> defaultMetadata = new LinkedHashMap<>();
+            defaultMetadata.put("message_type", type);
+            defaultMetadata.put("message_sha256", StuffAuditEmitter.sha256(stored));
+            emitAdminOutcome(sender, "joinmsg.default_changed", "joinmsg:default:" + type,
+                    null, "admin_set", defaultMetadata, saved);
             if (saved) {
-                sender.sendMessage(Component.text("Default " + type + " message updated.").color(NamedTextColor.GREEN));
+                sender.sendMessage(Component.text("Default " + type + " message updated.")
+                        .color(NamedTextColor.GREEN));
             } else {
                 sender.sendMessage(Component.text("Failed to save the message store! Check console.")
                         .color(NamedTextColor.RED));
@@ -913,7 +939,12 @@ public class MainCommand implements CommandExecutor {
             }
 
             String message = String.join(" ", Arrays.copyOfRange(args, 3, args.length)).replace("%player%", "{player}");
-            if (store.setFirstJoinMessage(message)) {
+            boolean saved = store.setFirstJoinMessage(message);
+            Map<String, Object> firstJoinMetadata = new LinkedHashMap<>();
+            firstJoinMetadata.put("message_sha256", StuffAuditEmitter.sha256(message));
+            emitAdminOutcome(sender, "joinmsg.firstjoin_changed", "joinmsg:first_join",
+                    null, "admin_set", firstJoinMetadata, saved);
+            if (saved) {
                 sender.sendMessage(Component.text("First-join message updated. (Uses MiniMessage tags, e.g. <gold>, not & codes.)")
                         .color(NamedTextColor.GREEN));
             } else {
@@ -932,6 +963,42 @@ public class MainCommand implements CommandExecutor {
         return player.getName() != null ? player.getName() : player.getUniqueId().toString();
     }
 
+    private void emitJoinMsgAdmin(CommandSender sender, String operation, OfflinePlayer target,
+                                  String targetName, String messageType, Map<String, Object> extra,
+                                  boolean committed) {
+        UUID subjectId = target == null ? null : target.getUniqueId();
+        String stableTarget = subjectId == null ? targetName : subjectId.toString();
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("message_type", messageType);
+        metadata.put("target_name", targetName);
+        metadata.putAll(extra);
+        Map<String, Object> targetLocation = StuffAuditEmitter.location(target == null ? null : target.getPlayer());
+        if (!targetLocation.isEmpty()) {
+            metadata.put("location_source", "subject");
+            metadata.putAll(targetLocation);
+        }
+        emitAdminOutcome(sender, "joinmsg." + operation, "joinmsg:" + stableTarget, subjectId,
+                "admin_mutation", metadata, committed);
+    }
+
+    private void emitAdminOutcome(CommandSender sender, String operation, String businessId,
+                                  UUID subjectId, String reason, Map<String, Object> metadata,
+                                  boolean committed) {
+        UUID actorId = StuffAuditEmitter.actorId(sender);
+        if (!metadata.containsKey("world") && sender instanceof Player actor) {
+            metadata.put("location_source", "actor");
+            metadata.putAll(StuffAuditEmitter.location(actor));
+        }
+        if (committed) {
+            StuffAuditEmitter.emit(operation, StuffAuditEmitter.correlationId(), businessId,
+                    actorId, subjectId, null, reason, metadata);
+            return;
+        }
+        metadata.put("failure", "write_error");
+        StuffAuditEmitter.emitFailed(operation, StuffAuditEmitter.correlationId(), businessId,
+                actorId, subjectId, null, reason, metadata);
+    }
+
     /**
      * Tells staff when a grant did not fully reach the target (e.g. another plugin cancelled the drop).
      *
@@ -944,6 +1011,81 @@ public class MainCommand implements CommandExecutor {
                         + " " + itemLabel + " could not be delivered to " + target.getName() + "!")
                 .color(NamedTextColor.RED));
         return true;
+    }
+
+    private ItemDelivery.Result giveStaffToken(CommandSender sender, Player target, ItemStack token,
+                                String tokenType, int amount) {
+        // Tokens are fungible and stackable: never PDC-stamp them (see ItemIdentity); one row-only lot uuid per grant.
+        UUID actorId = StuffAuditEmitter.actorId(sender);
+        Map<String, Object> lot = ItemIdentity.lotMetadata(ItemIdentity.ORIGIN_STAFF_GRANT,
+                actorId == null ? "console" : actorId.toString(), amount);
+        Map<String, Object> metadata = new LinkedHashMap<>(
+                StuffAuditEmitter.tokenMetadata(tokenType, amount, "admin_give"));
+        metadata.putAll(lot);
+        metadata.putAll(StuffAuditEmitter.location(target));
+        UUID correlationId = StuffAuditEmitter.correlationId();
+        String businessId = StuffAuditEmitter.tokenBusinessId(tokenType);
+        ItemDelivery.Result delivery;
+        try {
+            delivery = ItemDelivery.deliver(target, token);
+        } catch (RuntimeException e) {
+            StuffAuditEmitter.emitDeliveryException("token.granted", correlationId, businessId,
+                    actorId, target.getUniqueId(), "admin_give", metadata, e);
+            throw e;
+        }
+        StuffAuditEmitter.emitDelivery("token.granted", correlationId, businessId,
+                actorId, target.getUniqueId(), "admin_give", delivery, metadata);
+        return delivery;
+    }
+
+    private ItemDelivery.Result deliverStaffGrant(CommandSender sender, Player target, ItemStack item,
+                                                  String operation, String businessId, String grantType,
+                                                  Map<String, Object> extra) {
+        int amount = item.getAmount();
+        try {
+            return ItemDelivery.deliverOrDropWhenFull(target, item);
+        } catch (RuntimeException e) {
+            StuffAuditEmitter.emitDeliveryException(operation, StuffAuditEmitter.correlationId(), businessId,
+                    StuffAuditEmitter.actorId(sender), target.getUniqueId(), "admin_give",
+                    staffGrantMetadata(target, grantType, amount, extra), e);
+            throw e;
+        }
+    }
+
+    private void emitStaffItemGrant(CommandSender sender, Player target, String operation,
+                                    String businessId, String grantType, ItemDelivery.Result delivery,
+                                    Map<String, Object> extra) {
+        StuffAuditEmitter.emitDelivery(operation, StuffAuditEmitter.correlationId(), businessId,
+                StuffAuditEmitter.actorId(sender), target.getUniqueId(), "admin_give", delivery,
+                staffGrantMetadata(target, grantType, delivery.requestedAmount(), extra));
+    }
+
+    private void emitStaffItemGrantFailed(CommandSender sender, Player target, String operation,
+                                          String businessId, String grantType, int amount,
+                                          String failure, Map<String, Object> extra) {
+        Map<String, Object> metadata = staffGrantMetadata(target, grantType, amount, extra);
+        metadata.put("failure", failure);
+        StuffAuditEmitter.emitFailed(operation, StuffAuditEmitter.correlationId(), businessId,
+                StuffAuditEmitter.actorId(sender), target.getUniqueId(), null, "admin_give", metadata);
+    }
+
+    private static Map<String, Object> staffGrantMetadata(Player target, String grantType, int amount,
+                                                          Map<String, Object> extra) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("grant_type", grantType);
+        metadata.put("amount", amount);
+        metadata.put("delivery", "admin_give");
+        if (extra != null) metadata.putAll(extra);
+        metadata.putAll(StuffAuditEmitter.location(target));
+        return metadata;
+    }
+
+    private static int totalAmount(List<ItemStack> items) {
+        int total = 0;
+        for (ItemStack item : items) {
+            if (item != null && !item.getType().isAir()) total += item.getAmount();
+        }
+        return total;
     }
 
     private boolean handleLastSprint(CommandSender sender, String[] args) {
@@ -1001,8 +1143,11 @@ public class MainCommand implements CommandExecutor {
                     return true;
                 }
                 List<ItemStack> kit = lastSprint.getRewardItems();
+                int kitAmount = totalAmount(kit);
                 // Flag before delivering so the first-join grant can never duplicate this kit.
                 if (!lastSprint.tryMarkGiftReceived(target.getUniqueId())) {
+                    emitStaffItemGrantFailed(sender, target, "kit.granted", "kit:last_sprint", "last_sprint_kit",
+                            kitAmount, "gift_flag_unsaved", Map.of("stack_count", kit.size(), "gift_flag_saved", false));
                     PrettyLogger.warn("Last Sprint gift flag for " + target.getName()
                             + " could not be saved; the kit was not delivered");
                     sender.sendMessage(Component.text("Warning: the Last Sprint gift flag for " + target.getName()
@@ -1010,7 +1155,18 @@ public class MainCommand implements CommandExecutor {
                             .color(NamedTextColor.YELLOW));
                     return true;
                 }
-                ItemDelivery.Result kitDelivery = lastSprint.giveRewards(target, kit);
+                ItemDelivery.Result kitDelivery;
+                try {
+                    kitDelivery = lastSprint.giveRewards(target, kit);
+                } catch (RuntimeException e) {
+                    StuffAuditEmitter.emitDeliveryException("kit.granted", StuffAuditEmitter.correlationId(),
+                            "kit:last_sprint", StuffAuditEmitter.actorId(sender), target.getUniqueId(),
+                            "admin_give", staffGrantMetadata(target, "last_sprint_kit", kitAmount,
+                                    Map.of("stack_count", kit.size(), "gift_flag_saved", true)), e);
+                    throw e;
+                }
+                emitStaffItemGrant(sender, target, "kit.granted", "kit:last_sprint", "last_sprint_kit",
+                        kitDelivery, Map.of("stack_count", kit.size(), "gift_flag_saved", true));
                 if (reportUndelivered(sender, target, kitDelivery, "Last Sprint kit item(s)")) {
                     return true;
                 }
@@ -1020,7 +1176,7 @@ public class MainCommand implements CommandExecutor {
                         .append(Component.text("!").color(NamedTextColor.GREEN)));
                 target.sendMessage(Component.text("You've been given the Last Sprint starter kit by an admin!")
                         .color(NamedTextColor.GREEN));
-                PrettyLogger.info("Force-gave Last Sprint kit to " + target.getName() + " (by " + sender.getName() + ")");
+                PrettyLogger.debug("Force-gave Last Sprint kit to " + target.getName() + " (by " + sender.getName() + ")");
                 return true;
             }
             case "reset" -> {
@@ -1058,7 +1214,7 @@ public class MainCommand implements CommandExecutor {
                         .color(NamedTextColor.GREEN)
                         .append(Component.text("ENABLED").color(NamedTextColor.GREEN).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD))
                         .append(Component.text(" — all new players joining will receive the kit.").color(NamedTextColor.GREEN)));
-                PrettyLogger.info("Last Sprint activated by " + sender.getName());
+                PrettyLogger.debug("Last Sprint activated by " + sender.getName());
                 return true;
             }
             case "disable" -> {
@@ -1072,7 +1228,7 @@ public class MainCommand implements CommandExecutor {
                         .color(NamedTextColor.YELLOW)
                         .append(Component.text("DISABLED").color(NamedTextColor.RED).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD))
                         .append(Component.text(" — auto-give on join is off.").color(NamedTextColor.YELLOW)));
-                PrettyLogger.info("Last Sprint deactivated by " + sender.getName());
+                PrettyLogger.debug("Last Sprint deactivated by " + sender.getName());
                 return true;
             }
             case "info" -> {

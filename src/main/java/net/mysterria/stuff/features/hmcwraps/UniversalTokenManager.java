@@ -83,6 +83,10 @@ public class UniversalTokenManager {
     }
 
 
+    public String tokenMarker(ItemStack item) {
+        return isToken(item) ? tokenKey.toString() : null;
+    }
+
     public boolean consumeToken(ItemStack item, int amount) {
         if (amount <= 0 || !isToken(item)) {
             return false;
