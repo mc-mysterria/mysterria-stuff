@@ -120,7 +120,7 @@ public final class MysterriaStuff extends JavaPlugin {
 
         if (configManager.isBoosterPatriarchEnabled()) {
             loadCoiApi();
-            BoosterPatriarchListener boosterPatriarchListener = new BoosterPatriarchListener(this);
+            boosterPatriarchListener = new BoosterPatriarchListener(this);
             getServer().getPluginManager().registerEvents(boosterPatriarchListener, this);
             PrettyLogger.feature("CoI Booster Patriarch System");
         }

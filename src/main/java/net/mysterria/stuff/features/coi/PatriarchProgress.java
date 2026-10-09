@@ -37,11 +37,18 @@ final class PatriarchProgress {
         List<Object> pathways = (List<Object>) type.getMethod("getPathways").invoke(beyonder);
         Object patriarch = findPatriarch(pathways);
         if (patriarch == null || pathways.size() <= 1) return;
+        // A pending snapshot is never overwritten; a fresh regrant holds nothing to lose, so it may go.
+        boolean pending = hasSnapshot(player);
+        if (pending && !isFresh(patriarch)) {
+            throw new IllegalStateException("Patriarch was re-added with progress while a snapshot is pending");
+        }
         // Resolve the save hook before changing either authority.
         Method save = coi.getClass().getMethod("saveBeyonderYamlSync", type);
-        String snapshot = gson.toJson(patriarch.getClass().getMethod("serialize").invoke(patriarch));
-        player.getPersistentDataContainer().set(key, PersistentDataType.STRING, snapshot);
-        player.saveData();
+        if (!pending) {
+            String snapshot = gson.toJson(patriarch.getClass().getMethod("serialize").invoke(patriarch));
+            player.getPersistentDataContainer().set(key, PersistentDataType.STRING, snapshot);
+            player.saveData();
+        }
         transfers(loader, "endTemporaryTransfers", player);
         pathways.remove(patriarch);
         transfers(loader, "reconcileGathering", player);
@@ -52,16 +59,22 @@ final class PatriarchProgress {
     }
 
     @SuppressWarnings("unchecked")
-    void restore(Player player) throws ReflectiveOperationException {
+    /** Returns true when the saved progression was restored, false when there was nothing we may change. */
+    boolean restore(Player player) throws ReflectiveOperationException {
         String raw = player.getPersistentDataContainer().get(key, PersistentDataType.STRING);
-        if (raw == null) return;
+        if (raw == null) return false;
         Map<String, Object> data = gson.fromJson(raw, new TypeToken<Map<String, Object>>() {}.getType());
         var coi = Bukkit.getPluginManager().getPlugin("CircleOfImagination");
         ClassLoader loader = coi.getClass().getClassLoader();
         Class<?> type = Class.forName(COI_PACKAGE + "domain.beyonder.model.Beyonder", true, loader);
         Object beyonder = nativeBeyonder(player, type);
-        if (beyonder == null) return;
+        if (beyonder == null) return false;
         List<Object> pathways = (List<Object>) type.getMethod("getPathways").invoke(beyonder);
+        // Only a fresh regrant is replaced; a pathway with progress stays and the snapshot is kept.
+        Object existing = findPatriarch(pathways);
+        if (existing != null && !isFresh(existing)) {
+            throw new IllegalStateException("Patriarch was re-added with progress, snapshot kept");
+        }
         Method save = coi.getClass().getMethod("saveBeyonderYamlSync", type);
         Class<?> factory = Class.forName(COI_PACKAGE + "pathways.Pathways", true, loader);
         Object patriarch = factory.getMethod("getNewPathway", String.class, int.class, int.class, type)
@@ -81,20 +94,34 @@ final class PatriarchProgress {
         if (data.get("pathway-acquired-at") instanceof Number value) {
             pathwayType.getMethod("setPathwayAcquiredAt", long.class).invoke(patriarch, value.longValue());
         }
-        // A Patriarch pathway that was re-added while suspended is replaced by the saved one.
-        Object existing = findPatriarch(pathways);
         if (existing != null) {
             transfers(loader, "endTemporaryTransfers", player);
             pathways.remove(existing);
         }
         pathways.add(patriarch);
-        refresh(beyonder, type);
-        // Consume only after CoI has saved the restored state.
-        if (!Boolean.TRUE.equals(save.invoke(coi, beyonder))) {
-            throw new IllegalStateException("CoI could not save Patriarch progression");
+        try {
+            refresh(beyonder, type);
+            if (!Boolean.TRUE.equals(save.invoke(coi, beyonder))) {
+                throw new IllegalStateException("CoI could not save Patriarch progression");
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            // Undo the swap so progress earned before the next retry is not replaced by the snapshot.
+            pathways.remove(patriarch);
+            if (existing != null) pathways.add(existing);
+            refresh(beyonder, type);
+            throw e;
         }
+        // Consume only after CoI has saved the restored state.
         player.getPersistentDataContainer().remove(key);
         player.saveData();
+        return true;
+    }
+
+    /** A Patriarch pathway as freshly granted: sequence 9 and no sacrifice progress. */
+    private boolean isFresh(Object pathway) throws ReflectiveOperationException {
+        Map<?, ?> data = (Map<?, ?>) pathway.getClass().getMethod("serialize").invoke(pathway);
+        return data.get("sequence") instanceof Number sequence && sequence.intValue() == 9
+                && data.get("sacrifice-progress") instanceof Number progress && progress.intValue() == 0;
     }
 
     /** The player's Beyonder, or null when its pathways are virtual or mirrored and not ours to change. */

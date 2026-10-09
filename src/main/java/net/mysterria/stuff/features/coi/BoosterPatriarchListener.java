@@ -119,8 +119,10 @@ public class BoosterPatriarchListener implements Listener {
     }
 
     private void updateBoosterList(String[] newBoosters) {
+        if (newBoosters == null) return;
         Set<String> newBoosterSet = new HashSet<>();
         for (String booster : newBoosters) {
+            if (booster == null || booster.isBlank()) return;
             newBoosterSet.add(booster.toLowerCase(Locale.ROOT));
         }
 
@@ -164,17 +166,25 @@ public class BoosterPatriarchListener implements Listener {
         }
     }
 
-    private void restorePatriarch(Player player) {
+    private void restorePatriarch(Player player, CommandSender reporter) {
         try {
-            progress.restore(player);
+            boolean restored = progress.restore(player);
+            if (reporter != null) {
+                reporter.sendMessage(restored
+                        ? Component.text("Restored Patriarch progression for " + player.getName() + ".").color(NamedTextColor.GREEN)
+                        : Component.text("Patriarch progression for " + player.getName() + " was not restored: no native Beyonder data to change.").color(NamedTextColor.YELLOW));
+            }
         } catch (ReflectiveOperationException | RuntimeException e) {
             PrettyLogger.warn("Could not restore Patriarch progression for " + player.getName() + ": " + e.getMessage());
+            if (reporter != null) {
+                reporter.sendMessage(Component.text("Could not restore Patriarch progression for " + player.getName() + ": " + e.getMessage() + ". Check console.").color(NamedTextColor.RED));
+            }
         }
     }
 
     private void addPatriarchRole(Player player) {
         if (progress.hasSnapshot(player) && hasPatriarchInCoI(player)) {
-            restorePatriarch(player);
+            restorePatriarch(player, null);
             return;
         }
         String reason = checkShouldAddPatriarch(player);
@@ -184,7 +194,7 @@ public class BoosterPatriarchListener implements Listener {
         }
 
         if (progress.hasSnapshot(player)) {
-            restorePatriarch(player);
+            restorePatriarch(player, null);
             return;
         }
 
@@ -259,7 +269,7 @@ public class BoosterPatriarchListener implements Listener {
         }
 
         if (progress.hasSnapshot(player)) {
-            restorePatriarch(player);
+            restorePatriarch(player, reporter);
             return;
         }
 
