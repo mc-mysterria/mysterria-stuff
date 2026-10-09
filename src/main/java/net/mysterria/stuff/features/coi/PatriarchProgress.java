@@ -63,28 +63,32 @@ final class PatriarchProgress {
         if (beyonder == null) return;
         List<Object> pathways = (List<Object>) type.getMethod("getPathways").invoke(beyonder);
         Method save = coi.getClass().getMethod("saveBeyonderYamlSync", type);
-        if (findPatriarch(pathways) == null) {
-            Class<?> factory = Class.forName(COI_PACKAGE + "pathways.Pathways", true, loader);
-            Object patriarch = factory.getMethod("getNewPathway", String.class, int.class, int.class, type)
-                    .invoke(null, "patriarch", ((Number) data.get("sequence")).intValue(),
-                            ((Number) data.get("acting")).intValue(), beyonder);
-            if (patriarch == null) throw new IllegalStateException("CoI could not restore Patriarch");
-            Class<?> pathwayType = patriarch.getClass();
-            pathwayType.getMethod("loadSourceLedger", Object.class).invoke(patriarch, data.get("acting-sources"));
-            pathwayType.getMethod("loadOverflow", Object.class, Object.class, Object.class).invoke(patriarch,
-                    data.get("overflow-acting"), data.get("overflow-sources"), data.get("overflow-week"));
-            if (data.get("sacrifice-progress") instanceof Number value) {
-                pathwayType.getMethod("setSacrificeProgress", int.class).invoke(patriarch, value.intValue());
-            }
-            if (data.get("last-advancement-at") instanceof Number value) {
-                pathwayType.getMethod("setLastAdvancementAt", long.class).invoke(patriarch, value.longValue());
-            }
-            if (data.get("pathway-acquired-at") instanceof Number value) {
-                pathwayType.getMethod("setPathwayAcquiredAt", long.class).invoke(patriarch, value.longValue());
-            }
-            pathways.add(patriarch);
-            refresh(beyonder, type);
+        Class<?> factory = Class.forName(COI_PACKAGE + "pathways.Pathways", true, loader);
+        Object patriarch = factory.getMethod("getNewPathway", String.class, int.class, int.class, type)
+                .invoke(null, "patriarch", ((Number) data.get("sequence")).intValue(),
+                        ((Number) data.get("acting")).intValue(), beyonder);
+        if (patriarch == null) throw new IllegalStateException("CoI could not restore Patriarch");
+        Class<?> pathwayType = patriarch.getClass();
+        pathwayType.getMethod("loadSourceLedger", Object.class).invoke(patriarch, data.get("acting-sources"));
+        pathwayType.getMethod("loadOverflow", Object.class, Object.class, Object.class).invoke(patriarch,
+                data.get("overflow-acting"), data.get("overflow-sources"), data.get("overflow-week"));
+        if (data.get("sacrifice-progress") instanceof Number value) {
+            pathwayType.getMethod("setSacrificeProgress", int.class).invoke(patriarch, value.intValue());
         }
+        if (data.get("last-advancement-at") instanceof Number value) {
+            pathwayType.getMethod("setLastAdvancementAt", long.class).invoke(patriarch, value.longValue());
+        }
+        if (data.get("pathway-acquired-at") instanceof Number value) {
+            pathwayType.getMethod("setPathwayAcquiredAt", long.class).invoke(patriarch, value.longValue());
+        }
+        // A Patriarch pathway that was re-added while suspended is replaced by the saved one.
+        Object existing = findPatriarch(pathways);
+        if (existing != null) {
+            transfers(loader, "endTemporaryTransfers", player);
+            pathways.remove(existing);
+        }
+        pathways.add(patriarch);
+        refresh(beyonder, type);
         // Consume only after CoI has saved the restored state.
         if (!Boolean.TRUE.equals(save.invoke(coi, beyonder))) {
             throw new IllegalStateException("CoI could not save Patriarch progression");

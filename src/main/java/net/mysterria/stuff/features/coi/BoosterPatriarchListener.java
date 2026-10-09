@@ -24,10 +24,12 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class BoosterPatriarchListener implements Listener {
 
@@ -40,6 +42,7 @@ public class BoosterPatriarchListener implements Listener {
 
     private final Set<String> currentBoosters;
     private final Map<UUID, Long> missingSince = new HashMap<>();
+    private final AtomicBoolean fetchInProgress = new AtomicBoolean();
     private final PatriarchProgress progress;
 
     private final long updateIntervalTicks;
@@ -87,6 +90,7 @@ public class BoosterPatriarchListener implements Listener {
     }
 
     private void fetchBoostersAsync() {
+        if (!fetchInProgress.compareAndSet(false, true)) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 HttpRequest request = HttpRequest.newBuilder()
@@ -108,6 +112,8 @@ public class BoosterPatriarchListener implements Listener {
                 PrettyLogger.warn("Failed to parse booster list JSON: " + e.getMessage());
             } catch (Exception e) {
                 PrettyLogger.warn("Error fetching boosters: " + e.getMessage());
+            } finally {
+                fetchInProgress.set(false);
             }
         });
     }
@@ -115,28 +121,14 @@ public class BoosterPatriarchListener implements Listener {
     private void updateBoosterList(String[] newBoosters) {
         Set<String> newBoosterSet = new HashSet<>();
         for (String booster : newBoosters) {
-            newBoosterSet.add(booster.toLowerCase());
+            newBoosterSet.add(booster.toLowerCase(Locale.ROOT));
         }
 
-        Set<String> addedBoosters = new HashSet<>(newBoosterSet);
-        addedBoosters.removeAll(currentBoosters);
-
-        Set<String> removedBoosters = new HashSet<>(currentBoosters);
-        removedBoosters.removeAll(newBoosterSet);
-
-        currentBoosters.clear();
-        currentBoosters.addAll(newBoosterSet);
-
         Bukkit.getScheduler().runTask(plugin, () -> {
+            currentBoosters.clear();
+            currentBoosters.addAll(newBoosterSet);
             for (Player player : Bukkit.getOnlinePlayers()) {
                 reconcilePatriarch(player, true);
-            }
-
-            if (!addedBoosters.isEmpty()) {
-                PrettyLogger.debug("Added boosters: " + addedBoosters);
-            }
-            if (!removedBoosters.isEmpty()) {
-                PrettyLogger.debug("Removed boosters: " + removedBoosters);
             }
         });
     }
@@ -148,7 +140,7 @@ public class BoosterPatriarchListener implements Listener {
 
     // Only a fetched list may suspend, and only after the player is missing from two lists one interval apart.
     private void reconcilePatriarch(Player player, boolean fromFetch) {
-        if (currentBoosters.contains(player.getName().toLowerCase())) {
+        if (currentBoosters.contains(player.getName().toLowerCase(Locale.ROOT))) {
             missingSince.remove(player.getUniqueId());
             if (shouldRemovePatriarchDueToBoon(player)) {
                 suspendPatriarch(player);
@@ -287,7 +279,7 @@ public class BoosterPatriarchListener implements Listener {
     }
 
     public void sendDiagnostics(Player player, CommandSender reporter) {
-        String nameLower = player.getName().toLowerCase();
+        String nameLower = player.getName().toLowerCase(Locale.ROOT);
         boolean inBoosterList = currentBoosters.contains(nameLower);
 
         CircleOfImaginationAPI api = plugin.getCoiAPI();
