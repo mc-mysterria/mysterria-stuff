@@ -22,13 +22,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Locale;
-import java.util.UUID;
-import java.util.HashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class BoosterPatriarchListener implements Listener {
@@ -42,9 +40,7 @@ public class BoosterPatriarchListener implements Listener {
 
     private final Set<String> currentBoosters;
     private final Map<UUID, Long> missingSince = new HashMap<>();
-    private final AtomicBoolean fetchInProgress = new AtomicBoolean();
     private final PatriarchProgress progress;
-    private boolean boosterListLoaded;
 
     private final long updateIntervalTicks;
     private BukkitRunnable updateTask;
@@ -91,7 +87,6 @@ public class BoosterPatriarchListener implements Listener {
     }
 
     private void fetchBoostersAsync() {
-        if (!fetchInProgress.compareAndSet(false, true)) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 HttpRequest request = HttpRequest.newBuilder()
@@ -113,26 +108,35 @@ public class BoosterPatriarchListener implements Listener {
                 PrettyLogger.warn("Failed to parse booster list JSON: " + e.getMessage());
             } catch (Exception e) {
                 PrettyLogger.warn("Error fetching boosters: " + e.getMessage());
-            } finally {
-                fetchInProgress.set(false);
             }
         });
     }
 
     private void updateBoosterList(String[] newBoosters) {
-        if (newBoosters == null) return;
         Set<String> newBoosterSet = new HashSet<>();
         for (String booster : newBoosters) {
-            if (booster == null || booster.isBlank()) return;
-            newBoosterSet.add(booster.toLowerCase(Locale.ROOT));
+            newBoosterSet.add(booster.toLowerCase());
         }
 
+        Set<String> addedBoosters = new HashSet<>(newBoosterSet);
+        addedBoosters.removeAll(currentBoosters);
+
+        Set<String> removedBoosters = new HashSet<>(currentBoosters);
+        removedBoosters.removeAll(newBoosterSet);
+
+        currentBoosters.clear();
+        currentBoosters.addAll(newBoosterSet);
+
         Bukkit.getScheduler().runTask(plugin, () -> {
-            currentBoosters.clear();
-            currentBoosters.addAll(newBoosterSet);
-            boosterListLoaded = true;
             for (Player player : Bukkit.getOnlinePlayers()) {
                 reconcilePatriarch(player, true);
+            }
+
+            if (!addedBoosters.isEmpty()) {
+                PrettyLogger.debug("Added boosters: " + addedBoosters);
+            }
+            if (!removedBoosters.isEmpty()) {
+                PrettyLogger.debug("Removed boosters: " + removedBoosters);
             }
         });
     }
@@ -142,20 +146,19 @@ public class BoosterPatriarchListener implements Listener {
         reconcilePatriarch(event.getPlayer(), false);
     }
 
-    private void reconcilePatriarch(Player player, boolean verifiedFetch) {
-        if (!boosterListLoaded) return;
-        boolean isBooster = currentBoosters.contains(player.getName().toLowerCase(Locale.ROOT));
-        if (isBooster) {
+    // Only a fetched list may suspend, and only after the player is missing from two lists one interval apart.
+    private void reconcilePatriarch(Player player, boolean fromFetch) {
+        if (currentBoosters.contains(player.getName().toLowerCase())) {
             missingSince.remove(player.getUniqueId());
             if (shouldRemovePatriarchDueToBoon(player)) {
                 suspendPatriarch(player);
             } else {
                 addPatriarchRole(player);
             }
-        } else if (hasPatriarchInCoI(player) && verifiedFetch) {
+        } else if (fromFetch && hasPatriarchInCoI(player)) {
             long now = System.currentTimeMillis();
-            Long firstMissing = missingSince.putIfAbsent(player.getUniqueId(), now);
-            if (firstMissing != null && now - firstMissing >= updateIntervalTicks * 50L) {
+            long since = missingSince.computeIfAbsent(player.getUniqueId(), id -> now);
+            if (now - since >= updateIntervalTicks * 50L) {
                 suspendPatriarch(player);
             }
         }
@@ -166,6 +169,14 @@ public class BoosterPatriarchListener implements Listener {
             progress.suspend(player);
         } catch (ReflectiveOperationException | RuntimeException e) {
             PrettyLogger.warn("Could not preserve Patriarch progression for " + player.getName() + ": " + e.getMessage());
+        }
+    }
+
+    private void restorePatriarch(Player player) {
+        try {
+            progress.restore(player);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            PrettyLogger.warn("Could not restore Patriarch progression for " + player.getName() + ": " + e.getMessage());
         }
     }
 
@@ -194,14 +205,6 @@ public class BoosterPatriarchListener implements Listener {
             PrettyLogger.debug("Added patriarch role to booster: " + playerName);
         } else {
             PrettyLogger.warn("Failed to add patriarch role to: " + playerName + " (CoI API returned false)");
-        }
-    }
-
-    private void restorePatriarch(Player player) {
-        try {
-            progress.restore(player);
-        } catch (ReflectiveOperationException | RuntimeException e) {
-            PrettyLogger.warn("Could not restore Patriarch progression for " + player.getName() + ": " + e.getMessage());
         }
     }
 
@@ -284,7 +287,7 @@ public class BoosterPatriarchListener implements Listener {
     }
 
     public void sendDiagnostics(Player player, CommandSender reporter) {
-        String nameLower = player.getName().toLowerCase(Locale.ROOT);
+        String nameLower = player.getName().toLowerCase();
         boolean inBoosterList = currentBoosters.contains(nameLower);
 
         CircleOfImaginationAPI api = plugin.getCoiAPI();
