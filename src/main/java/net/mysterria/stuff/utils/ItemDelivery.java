@@ -4,6 +4,7 @@ import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -13,13 +14,27 @@ import java.util.Map;
  */
 public final class ItemDelivery {
 
+    public static final String KEY_MODE = "delivery_mode";
+    public static final String KEY_DELIVERED = "delivered_amount";
+    public static final String KEY_DROPPED = "dropped_amount";
+    public static final String KEY_UNDELIVERED = "undelivered_amount";
+
     private ItemDelivery() {
     }
 
-    public record Result(int requestedAmount, int deliveredAmount, int droppedAmount, int undeliveredAmount) {
+    public record Result(int requestedAmount, int deliveredAmount, int droppedAmount,
+                         int undeliveredAmount) {
 
         static Result empty() {
             return new Result(0, 0, 0, 0);
+        }
+
+        public String mode() {
+            if (undeliveredAmount > 0) {
+                return deliveredAmount + droppedAmount <= 0 ? "undelivered" : "partial_undelivered";
+            }
+            if (droppedAmount <= 0) return "inventory";
+            return deliveredAmount <= 0 ? "dropped" : "partial";
         }
 
         public boolean complete() {
@@ -34,6 +49,15 @@ public final class ItemDelivery {
             return new Result(requestedAmount + other.requestedAmount,
                     deliveredAmount + other.deliveredAmount, droppedAmount + other.droppedAmount,
                     undeliveredAmount + other.undeliveredAmount);
+        }
+
+        public Map<String, Object> toMetadata() {
+            Map<String, Object> values = new LinkedHashMap<>();
+            values.put(KEY_MODE, mode());
+            values.put(KEY_DELIVERED, deliveredAmount);
+            values.put(KEY_DROPPED, droppedAmount);
+            if (undeliveredAmount > 0) values.put(KEY_UNDELIVERED, undeliveredAmount);
+            return values;
         }
     }
 
@@ -77,6 +101,15 @@ public final class ItemDelivery {
         Result total = Result.empty();
         for (ItemStack item : items) {
             total = total.plus(deliverOrDropWhenFull(player, item));
+        }
+        return total;
+    }
+
+    /** Summed amount of the non-air stacks, as reported in audit rows. */
+    public static int totalAmount(List<ItemStack> items) {
+        int total = 0;
+        for (ItemStack item : items) {
+            if (item != null && !item.getType().isAir()) total += item.getAmount();
         }
         return total;
     }

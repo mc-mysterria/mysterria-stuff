@@ -1,5 +1,7 @@
 package net.mysterria.stuff;
 
+import net.mysterria.stuff.audit.StuffAuditEmitter;
+
 import de.skyslycer.hmcwraps.HMCWraps;
 import dev.ua.ikeepcalm.coi.api.CircleOfImaginationAPI;
 import net.mysterria.stuff.commands.MainCommand;
@@ -9,6 +11,7 @@ import net.mysterria.stuff.config.ConfigManager;
 import net.mysterria.stuff.features.battlepass.NetheriteElytraBlocker;
 import net.mysterria.stuff.features.coi.*;
 import net.mysterria.stuff.features.dungeons.DungeonWorldEnforcer;
+import net.mysterria.stuff.features.dungeons.MythicDungeonsAuditModule;
 import net.mysterria.stuff.features.chat.ChatAliasIntegration;
 import net.mysterria.stuff.features.chat.ZelChatAliasIntegration;
 import net.mysterria.stuff.features.entities.CamelAiListener;
@@ -50,6 +53,7 @@ public final class MysterriaStuff extends JavaPlugin {
     private LastSprintGUI lastSprintGUI;
     private volatile ChatAliasIntegration chatAliasIntegration;
     private boolean chatAliasRegistrationQueued;
+    private MythicDungeonsAuditModule mythicDungeonsAudit;
 
     public static MysterriaStuff getInstance() {
         return instance;
@@ -57,6 +61,7 @@ public final class MysterriaStuff extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        StuffAuditEmitter.initialize(this);
         instance = this;
 
 
@@ -194,6 +199,9 @@ public final class MysterriaStuff extends JavaPlugin {
         }
 
         scheduleChatAliasIntegrationRegistration();
+        // MysterriaStuff loads before MythicDungeons (loadbefore), so this normally binds from
+        // the PluginEnableEvent below; this call covers a MythicDungeons that is already enabled.
+        openMythicDungeonsAudit();
 
         PrettyLogger.success("MysterriaStuff enabled successfully!");
         PrettyLogger.info("Use /mystuff help for available commands");
@@ -251,19 +259,23 @@ public final class MysterriaStuff extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        try {
+            closeChatAliasIntegration();
+            closeMythicDungeonsAudit();
 
-        closeChatAliasIntegration();
+            if (coiZoneManager != null) {
+                coiZoneManager.shutdown();
+            }
 
-        if (coiZoneManager != null) {
-            coiZoneManager.shutdown();
+            if (boosterPatriarchListener != null) {
+                boosterPatriarchListener.shutdown();
+            }
+
+            PrettyLogger.warn("MysterriaStuff is shutting down...");
+            PrettyLogger.info("Thanks for using MysterriaStuff!");
+        } finally {
+            StuffAuditEmitter.close();
         }
-
-        if (boosterPatriarchListener != null) {
-            boosterPatriarchListener.shutdown();
-        }
-
-        PrettyLogger.warn("MysterriaStuff is shutting down...");
-        PrettyLogger.info("Thanks for using MysterriaStuff!");
     }
 
     public RecipeManager getRecipeManager() {
@@ -369,6 +381,29 @@ public final class MysterriaStuff extends JavaPlugin {
         }
     }
 
+    private void openMythicDungeonsAudit() {
+        if (mythicDungeonsAudit != null) return;
+        try {
+            mythicDungeonsAudit = MythicDungeonsAuditModule.register(this);
+            if (mythicDungeonsAudit != null) PrettyLogger.debug("MythicDungeons audit rows bound");
+        } catch (Throwable error) {
+            mythicDungeonsAudit = null;
+            getLogger().log(java.util.logging.Level.WARNING,
+                    "MythicDungeons audit rows failed to register; they are disabled", error);
+        }
+    }
+
+    private void closeMythicDungeonsAudit() {
+        MythicDungeonsAuditModule module = mythicDungeonsAudit;
+        mythicDungeonsAudit = null;
+        if (module == null) return;
+        try {
+            module.close();
+        } catch (Throwable error) {
+            getLogger().log(java.util.logging.Level.WARNING, "MythicDungeons audit rows failed to close", error);
+        }
+    }
+
     /**
      * Kept separate from the plugin class so Bukkit's event-method reflection does not
      * resolve optional COI API types declared by unrelated MysterriaStuff methods before
@@ -387,12 +422,18 @@ public final class MysterriaStuff extends JavaPlugin {
             if (event.getPlugin().getName().equalsIgnoreCase("ZelChat")) {
                 plugin.scheduleChatAliasIntegrationRegistration();
             }
+            if (event.getPlugin().getName().equals(MythicDungeonsAuditModule.PLUGIN_NAME)) {
+                plugin.openMythicDungeonsAudit();
+            }
         }
 
         @EventHandler
         public void onPluginDisable(PluginDisableEvent event) {
             if (event.getPlugin().getName().equalsIgnoreCase("ZelChat")) {
                 plugin.closeChatAliasIntegration();
+            }
+            if (event.getPlugin().getName().equals(MythicDungeonsAuditModule.PLUGIN_NAME)) {
+                plugin.closeMythicDungeonsAudit();
             }
         }
     }

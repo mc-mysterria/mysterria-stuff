@@ -1,11 +1,15 @@
 package net.mysterria.stuff.commands;
 
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditOutcome;
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditRisk;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.mysterria.stuff.MysterriaStuff;
+import net.mysterria.stuff.audit.ItemIdentity;
+import net.mysterria.stuff.audit.StuffAuditEmitter;
 import net.mysterria.stuff.features.joinmsg.JoinMsgTokenManager;
 import net.mysterria.stuff.features.coi.BoosterPatriarchListener;
 import net.mysterria.stuff.features.joinmsg.JoinMsgSessionHandler;
@@ -29,7 +33,10 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 
 public class MainCommand implements CommandExecutor {
@@ -118,13 +125,13 @@ public class MainCommand implements CommandExecutor {
         sendCommandHelp(sender, "/mystuff joinmsg repair", "Re-import missing entries from the legacy .rs backup files");
         sendCommandHelp(sender, "/mystuff lastsprint setup", "Open the Last Sprint reward kit editor");
         sendCommandHelp(sender, "/mystuff lastsprint give <player>", "Force-give the Last Sprint kit to a player");
-        sendCommandHelp(sender, "/mystuff lastsprint reset <player>", "Reset a player's Last Sprint gift status");
+        sendCommandHelp(sender, "/mystuff lastsprint reset <player> [reason]", "Reset a player's Last Sprint gift status");
         sendCommandHelp(sender, "/mystuff lastsprint enable", "Enable auto-give on join");
         sendCommandHelp(sender, "/mystuff lastsprint disable", "Disable auto-give on join");
         sendCommandHelp(sender, "/mystuff lastsprint info", "Show Last Sprint status and reward count");
         sendCommandHelp(sender, "/mystuff booster check <player>", "Diagnose booster/patriarch state for a player");
-        sendCommandHelp(sender, "/mystuff booster grant <player>", "Force-grant Patriarch boon to a player");
-        sendCommandHelp(sender, "/mystuff booster revoke <player>", "Force-revoke Patriarch boon from a player");
+        sendCommandHelp(sender, "/mystuff booster grant <player> [reason]", "Force-grant Patriarch boon to a player");
+        sendCommandHelp(sender, "/mystuff booster revoke <player> [reason]", "Force-revoke Patriarch boon from a player");
         sendCommandHelp(sender, "/mystuff booster refresh", "Manually re-fetch the booster list from the API");
         sendCommandHelp(sender, "/mystuff booster list", "List all known boosters and tracked players");
 
@@ -149,6 +156,9 @@ public class MainCommand implements CommandExecutor {
 
         PrettyLogger.info("Reloading MysterriaStuff...");
 
+        boolean debugBefore = PrettyLogger.isDebugMode();
+        int recipesBefore = MysterriaStuff.getInstance().getRecipeManager() != null
+                ? MysterriaStuff.getInstance().getRecipeManager().getRecipeCount() : 0;
 
         MysterriaStuff.getInstance().getConfigManager().reloadConfig();
         MysterriaStuff.getInstance().reloadChatAliasIntegration();
@@ -168,6 +178,7 @@ public class MainCommand implements CommandExecutor {
 
         if (MysterriaStuff.getInstance().getJoinMsgStore() != null) {
             if (!MysterriaStuff.getInstance().getJoinMsgStore().tryLoad()) {
+                emitReload(sender, debugBefore, recipesBefore, false);
                 sender.sendMessage(Component.text("MysterriaStuff reloaded, but the join/quit message store failed to load. Check console.")
                         .color(NamedTextColor.RED));
                 return true;
@@ -175,10 +186,27 @@ public class MainCommand implements CommandExecutor {
             PrettyLogger.info("Reloaded join/quit message store");
         }
 
+        emitReload(sender, debugBefore, recipesBefore, true);
+
         sender.sendMessage(Component.text("MysterriaStuff reloaded successfully!")
                 .color(NamedTextColor.GREEN));
         PrettyLogger.success("Plugin reloaded by " + sender.getName());
         return true;
+    }
+
+    private void emitReload(CommandSender sender, boolean debugBefore, int recipesBefore,
+                            boolean joinMsgStoreLoaded) {
+        Map<String, Object> reloadValues = new LinkedHashMap<>();
+        reloadValues.put("debug_old", debugBefore);
+        reloadValues.put("debug_new", PrettyLogger.isDebugMode());
+        reloadValues.put("recipe_count_old", recipesBefore);
+        reloadValues.put("recipe_count_new", MysterriaStuff.getInstance().getRecipeManager() != null
+                ? MysterriaStuff.getInstance().getRecipeManager().getRecipeCount() : 0);
+        reloadValues.put("joinmsg_store_loaded", joinMsgStoreLoaded);
+        if (!joinMsgStoreLoaded) reloadValues.put("failure", "joinmsg_store_load_failed");
+        StuffAuditEmitter.emitStaff(joinMsgStoreLoaded ? AuditOutcome.COMMITTED : AuditOutcome.FAILED,
+                AuditRisk.LOW, "plugin.reloaded", StuffAuditEmitter.correlationId(), "plugin:config",
+                sender, null, "admin_reload", reloadValues);
     }
 
     private boolean handleGive(CommandSender sender, String[] args) {
@@ -210,12 +238,17 @@ public class MainCommand implements CommandExecutor {
             case "elytra" -> {
                 ItemStack elytra = getElytra();
                 if (elytra == null) {
+                    emitStaffItemGrantFailed(sender, target, "item.granted", "item:reinforced_elytra",
+                            "reinforced_elytra", 1, "item_creation_failed", null);
                     sender.sendMessage(Component.text("Failed to create elytra item!")
                             .color(NamedTextColor.RED));
                     return true;
                 }
 
-                ItemDelivery.Result delivery = ItemDelivery.deliverOrDropWhenFull(target, elytra);
+                ItemDelivery.Result delivery = deliverStaffGrant(sender, target, elytra, "item.granted",
+                        "item:reinforced_elytra", "reinforced_elytra", null);
+                emitStaffItemGrant(sender, target, "item.granted", "item:reinforced_elytra",
+                        "reinforced_elytra", delivery, null);
                 if (reportUndelivered(sender, target, delivery, "reinforced elytra")) {
                     return true;
                 }
@@ -225,7 +258,7 @@ public class MainCommand implements CommandExecutor {
                         .append(Component.text(playerName).color(NamedTextColor.AQUA))
                         .append(Component.text(" a reinforced elytra!").color(NamedTextColor.GREEN)));
 
-                PrettyLogger.info("Gave " + playerName + " a reinforced elytra (by " + sender.getName() + ")");
+                PrettyLogger.debug("Gave " + playerName + " a reinforced elytra (by " + sender.getName() + ")");
                 return true;
             }
             default -> {
@@ -281,6 +314,13 @@ public class MainCommand implements CommandExecutor {
 
 
         MysterriaStuff.getInstance().getConfigManager().setDebugMode(newState);
+
+        // Saving config.yml gives no completion signal, so this row is OBSERVED.
+        Map<String, Object> debugValues = new LinkedHashMap<>();
+        debugValues.put("debug_old", !newState);
+        debugValues.put("debug_new", newState);
+        StuffAuditEmitter.emitStaff(AuditOutcome.OBSERVED, AuditRisk.LOW, "plugin.debug_toggled",
+                StuffAuditEmitter.correlationId(), "plugin:debug", sender, null, "admin_toggle", debugValues);
 
         sender.sendMessage(Component.text("Debug mode: ")
                 .color(NamedTextColor.YELLOW)
@@ -399,7 +439,14 @@ public class MainCommand implements CommandExecutor {
             case "reload" -> {
                 sender.sendMessage(Component.text("Reloading recipes...")
                         .color(NamedTextColor.YELLOW));
+                int recipesBefore = recipeManager.getRecipeCount();
                 recipeManager.reloadRecipes();
+                Map<String, Object> recipeValues = new LinkedHashMap<>();
+                recipeValues.put("recipe_count_old", recipesBefore);
+                recipeValues.put("recipe_count_new", recipeManager.getRecipeCount());
+                StuffAuditEmitter.emitStaff(AuditOutcome.COMMITTED, AuditRisk.LOW, "recipe.reloaded",
+                        StuffAuditEmitter.correlationId(), "plugin:recipes", sender, null, "admin_reload",
+                        recipeValues);
                 sender.sendMessage(Component.text("Recipes reloaded! Total: " + recipeManager.getRecipeCount())
                         .color(NamedTextColor.GREEN));
                 return true;
@@ -475,7 +522,7 @@ public class MainCommand implements CommandExecutor {
 
 
             ItemStack token = tokenManager.createToken(amount);
-            ItemDelivery.Result delivery = ItemDelivery.deliver(target, token);
+            ItemDelivery.Result delivery = giveStaffToken(sender, target, token, "universal", amount);
             if (reportUndelivered(sender, target, delivery, "Universal Token(s)")) {
                 return true;
             }
@@ -488,7 +535,7 @@ public class MainCommand implements CommandExecutor {
                     .append(Component.text(playerName).color(NamedTextColor.AQUA))
                     .append(Component.text(" " + amount + " Universal Token(s)!").color(NamedTextColor.GREEN)));
 
-            PrettyLogger.info("Gave " + playerName + " " + amount + " Universal Token(s) (by " + sender.getName() + ")");
+            PrettyLogger.debug("Gave " + playerName + " " + amount + " Universal Token(s) (by " + sender.getName() + ")");
             return true;
         }
         sender.sendMessage(Component.text("Unknown token subcommand!")
@@ -546,7 +593,7 @@ public class MainCommand implements CommandExecutor {
 
 
         ItemStack token = manager.createToken(amount);
-        ItemDelivery.Result delivery = ItemDelivery.deliver(target, token);
+        ItemDelivery.Result delivery = giveStaffToken(sender, target, token, "joinmsg", amount);
         if (reportUndelivered(sender, target, delivery, "Join/Quit Message Token(s)")) {
             return true;
         }
@@ -559,7 +606,7 @@ public class MainCommand implements CommandExecutor {
                 .append(Component.text(playerName).color(NamedTextColor.AQUA))
                 .append(Component.text(" " + amount + " Join/Quit Message Token(s)!").color(NamedTextColor.GREEN)));
 
-        PrettyLogger.info("Gave " + playerName + " " + amount + " Join/Quit Message Token(s) (by " + sender.getName() + ")");
+        PrettyLogger.debug("Gave " + playerName + " " + amount + " Join/Quit Message Token(s) (by " + sender.getName() + ")");
         return true;
     }
 
@@ -674,6 +721,7 @@ public class MainCommand implements CommandExecutor {
                 }
 
                 String message = String.join(" ", Arrays.copyOfRange(args, 4, args.length));
+                boolean previousSet = previousMessageSet(store, target, args[2], type);
                 JoinMsgStore.SetResult result = target != null
                         ? (type.equals("join") ? store.setPlayerMessages(target, message, null) : store.setPlayerMessages(target, null, message))
                         : (type.equals("join") ? store.setPendingMessages(args[2], message, null) : store.setPendingMessages(args[2], null, message));
@@ -688,6 +736,12 @@ public class MainCommand implements CommandExecutor {
                             Component.text("Message must contain %player%!").color(NamedTextColor.RED));
                     case WRITE_ERROR -> sender.sendMessage(
                             Component.text("Failed to save the message store! Check console.").color(NamedTextColor.RED));
+                }
+                if (result == JoinMsgStore.SetResult.OK || result == JoinMsgStore.SetResult.WRITE_ERROR) {
+                    Map<String, Object> extra = new LinkedHashMap<>();
+                    extra.put("previous_message_set", previousSet);
+                    emitJoinMsgAdmin(sender, "message_set", target, args[2], type, extra,
+                            result == JoinMsgStore.SetResult.OK);
                 }
                 return true;
             }
@@ -742,12 +796,21 @@ public class MainCommand implements CommandExecutor {
                     }
                 }
 
+                Map<String, Object> previousValues = new LinkedHashMap<>();
+                if (removeJoin) {
+                    previousValues.put("previous_join_set", previousMessageSet(store, target, args[2], "join"));
+                }
+                if (removeQuit) {
+                    previousValues.put("previous_quit_set", previousMessageSet(store, target, args[2], "quit"));
+                }
                 JoinMsgStore.RemoveResult removal = target != null
                         ? store.tryRemovePlayerMessages(target, removeJoin, removeQuit)
                         : store.tryRemovePendingMessages(args[2], removeJoin, removeQuit);
+                String removedType = removeJoin && removeQuit ? "join_and_quit" : removeJoin ? "join" : "quit";
                 if (removal == JoinMsgStore.RemoveResult.WRITE_ERROR) {
                     sender.sendMessage(Component.text("Failed to save the message store! Check console.")
                             .color(NamedTextColor.RED));
+                    emitJoinMsgAdmin(sender, "message_removed", target, args[2], removedType, previousValues, false);
                     return true;
                 }
                 String label = target != null ? displayName(target) : args[2];
@@ -757,6 +820,9 @@ public class MainCommand implements CommandExecutor {
                         .append(Component.text(label).color(NamedTextColor.AQUA))
                         .append(Component.text("."));
                 sender.sendMessage(result);
+                if (removal == JoinMsgStore.RemoveResult.REMOVED) {
+                    emitJoinMsgAdmin(sender, "message_removed", target, args[2], removedType, previousValues, true);
+                }
                 return true;
             }
             case "list" -> {
@@ -794,7 +860,13 @@ public class MainCommand implements CommandExecutor {
                 return handleJoinMsgFirstJoin(sender, store, args);
             }
             case "reload" -> {
-                if (!store.tryLoad()) {
+                boolean loaded = store.tryLoad();
+                Map<String, Object> reloadValues = new LinkedHashMap<>();
+                if (!loaded) reloadValues.put("failure", "load_failed");
+                StuffAuditEmitter.emitStaff(loaded ? AuditOutcome.COMMITTED : AuditOutcome.FAILED, AuditRisk.LOW,
+                        "joinmsg.store_reloaded", StuffAuditEmitter.correlationId(), "joinmsg:store", sender,
+                        null, "admin_reload", reloadValues);
+                if (!loaded) {
                     sender.sendMessage(Component.text("Reload failed; store is read-only until the file loads. Check console.")
                             .color(NamedTextColor.RED));
                     return true;
@@ -805,6 +877,7 @@ public class MainCommand implements CommandExecutor {
             }
             case "repair" -> {
                 int recovered = store.repairFromLegacyBackups();
+                emitJoinMsgRepair(sender, recovered);
                 if (recovered == JoinMsgStore.REPAIR_SAVE_FAILED) {
                     sender.sendMessage(Component.text("Failed to save the message store! Check console.")
                             .color(NamedTextColor.RED));
@@ -866,10 +939,17 @@ public class MainCommand implements CommandExecutor {
             }
 
             String stored = message.replace("%player%", "{player}");
+            String previousDefault = type.equals("join")
+                    ? store.getDefaultJoinMessage() : store.getDefaultQuitMessage();
             boolean saved = type.equals("join")
                     ? store.setDefaultJoinMessage(stored)
                     : store.setDefaultQuitMessage(stored);
 
+            Map<String, Object> defaultMetadata = new LinkedHashMap<>();
+            defaultMetadata.put("message_type", type);
+            defaultMetadata.put("previous_message_set", previousDefault != null);
+            emitAdminOutcome(sender, "joinmsg.default_changed", "joinmsg:default:" + type,
+                    null, "admin_set", defaultMetadata, saved);
             if (saved) {
                 sender.sendMessage(Component.text("Default " + type + " message updated.").color(NamedTextColor.GREEN));
             } else {
@@ -906,7 +986,13 @@ public class MainCommand implements CommandExecutor {
             }
 
             String message = String.join(" ", Arrays.copyOfRange(args, 3, args.length)).replace("%player%", "{player}");
-            if (store.setFirstJoinMessage(message)) {
+            String previousFirstJoin = store.getFirstJoinMessage();
+            boolean saved = store.setFirstJoinMessage(message);
+            Map<String, Object> firstJoinMetadata = new LinkedHashMap<>();
+            firstJoinMetadata.put("previous_message_set", previousFirstJoin != null);
+            emitAdminOutcome(sender, "joinmsg.firstjoin_changed", "joinmsg:first_join",
+                    null, "admin_set", firstJoinMetadata, saved);
+            if (saved) {
                 sender.sendMessage(Component.text("First-join message updated. (Uses MiniMessage tags, e.g. <gold>, not & codes.)")
                         .color(NamedTextColor.GREEN));
             } else {
@@ -921,8 +1007,85 @@ public class MainCommand implements CommandExecutor {
         return true;
     }
 
+    /** Optional trailing free-text reason on a sensitive staff command; null when absent. */
+    private static String reasonArg(String[] args, int from) {
+        if (args.length <= from) return null;
+        String reason = String.join(" ", Arrays.copyOfRange(args, from, args.length)).trim();
+        return reason.isEmpty() ? null : reason;
+    }
+
+    /** Whether a message of this type is stored, read from the in-memory store before the change. */
+    private static boolean previousMessageSet(JoinMsgStore store, OfflinePlayer target, String name, String type) {
+        String stored;
+        if (target != null) {
+            stored = storedMessage(store.getEntry(target), type);
+            if (stored == null && target.getName() != null) {
+                stored = storedMessage(store.findPendingByName(target.getName()), type);
+            }
+        } else {
+            stored = storedMessage(store.findPendingByName(name), type);
+        }
+        return stored != null;
+    }
+
+    private static String storedMessage(JoinMsgStore.MessageEntry entry, String type) {
+        if (entry == null) return null;
+        return type.equals("join") ? entry.join : entry.quit;
+    }
+
+    private void emitJoinMsgRepair(CommandSender sender, int recovered) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        AuditOutcome outcome;
+        if (recovered == JoinMsgStore.REPAIR_SAVE_FAILED) {
+            outcome = AuditOutcome.FAILED;
+            values.put("failure", "write_error");
+        } else if (recovered > 0) {
+            outcome = AuditOutcome.COMMITTED;
+            values.put("recovered_count", recovered);
+        } else {
+            // Nothing was written: no backup files, or the store already has everything in them.
+            outcome = AuditOutcome.OBSERVED;
+            values.put("recovered_count", 0);
+            values.put("result", recovered < 0 ? "no_backup_files" : "nothing_to_fill");
+        }
+        StuffAuditEmitter.emitStaff(outcome, AuditRisk.NORMAL, "joinmsg.store_repaired",
+                StuffAuditEmitter.correlationId(), "joinmsg:store", sender, null, "admin_repair", values);
+    }
+
     private String displayName(OfflinePlayer player) {
         return player.getName() != null ? player.getName() : player.getUniqueId().toString();
+    }
+
+    private void emitJoinMsgAdmin(CommandSender sender, String operation, OfflinePlayer target,
+                                  String targetName, String messageType, Map<String, Object> extra,
+                                  boolean committed) {
+        UUID subjectId = target == null ? null : target.getUniqueId();
+        String stableTarget = subjectId == null ? targetName : subjectId.toString();
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("message_type", messageType);
+        metadata.put("target_name", targetName);
+        metadata.putAll(extra);
+        emitAdminOutcome(sender, "joinmsg." + operation, "joinmsg:" + stableTarget, subjectId,
+                "admin_mutation", metadata, committed);
+    }
+
+    private void emitAdminOutcome(CommandSender sender, String operation, String businessId,
+                                  UUID subjectId, String reason, Map<String, Object> metadata,
+                                  boolean committed) {
+        UUID actorId = StuffAuditEmitter.actorId(sender);
+        metadata.putIfAbsent("actor_name", sender.getName());
+        if (!metadata.containsKey("world") && sender instanceof Player actor) {
+            metadata.put("location_source", "actor");
+            metadata.putAll(StuffAuditEmitter.location(actor));
+        }
+        if (committed) {
+            StuffAuditEmitter.emit(operation, StuffAuditEmitter.correlationId(), businessId,
+                    actorId, subjectId, null, reason, metadata);
+            return;
+        }
+        metadata.put("failure", "write_error");
+        StuffAuditEmitter.emitFailed(operation, StuffAuditEmitter.correlationId(), businessId,
+                actorId, subjectId, null, reason, metadata);
     }
 
     /** @return true (after telling staff) if part of the grant was not delivered, so the caller must not report success */
@@ -933,6 +1096,73 @@ public class MainCommand implements CommandExecutor {
                         + " " + itemLabel + " could not be delivered to " + target.getName() + "!")
                 .color(NamedTextColor.RED));
         return true;
+    }
+
+    private ItemDelivery.Result giveStaffToken(CommandSender sender, Player target, ItemStack token,
+                                String tokenType, int amount) {
+        // Tokens are fungible and stackable: never PDC-stamp them (see ItemIdentity); one row-only lot uuid per grant.
+        UUID actorId = StuffAuditEmitter.actorId(sender);
+        Map<String, Object> lot = ItemIdentity.lotMetadata(ItemIdentity.ORIGIN_STAFF_GRANT,
+                actorId == null ? "console" : actorId.toString(), amount);
+        Map<String, Object> metadata = new LinkedHashMap<>(
+                StuffAuditEmitter.tokenMetadata(tokenType, amount, "admin_give"));
+        metadata.putAll(lot);
+        metadata.putAll(StuffAuditEmitter.location(target));
+        UUID correlationId = StuffAuditEmitter.correlationId();
+        String businessId = StuffAuditEmitter.tokenBusinessId(tokenType);
+        ItemDelivery.Result delivery;
+        try {
+            delivery = ItemDelivery.deliver(target, token);
+        } catch (RuntimeException e) {
+            StuffAuditEmitter.emitDeliveryException("token.granted", correlationId, businessId,
+                    actorId, target.getUniqueId(), "admin_give", metadata, e);
+            throw e;
+        }
+        StuffAuditEmitter.emitDelivery("token.granted", correlationId, businessId,
+                actorId, target.getUniqueId(), "admin_give", delivery, metadata);
+        return delivery;
+    }
+
+    private ItemDelivery.Result deliverStaffGrant(CommandSender sender, Player target, ItemStack item,
+                                                  String operation, String businessId, String grantType,
+                                                  Map<String, Object> extra) {
+        int amount = item.getAmount();
+        try {
+            return ItemDelivery.deliverOrDropWhenFull(target, item);
+        } catch (RuntimeException e) {
+            StuffAuditEmitter.emitDeliveryException(operation, StuffAuditEmitter.correlationId(), businessId,
+                    StuffAuditEmitter.actorId(sender), target.getUniqueId(), "admin_give",
+                    staffGrantMetadata(target, grantType, amount, extra), e);
+            throw e;
+        }
+    }
+
+    private void emitStaffItemGrant(CommandSender sender, Player target, String operation,
+                                    String businessId, String grantType, ItemDelivery.Result delivery,
+                                    Map<String, Object> extra) {
+        StuffAuditEmitter.emitDelivery(operation, StuffAuditEmitter.correlationId(), businessId,
+                StuffAuditEmitter.actorId(sender), target.getUniqueId(), "admin_give", delivery,
+                staffGrantMetadata(target, grantType, delivery.requestedAmount(), extra));
+    }
+
+    private void emitStaffItemGrantFailed(CommandSender sender, Player target, String operation,
+                                          String businessId, String grantType, int amount,
+                                          String failure, Map<String, Object> extra) {
+        Map<String, Object> metadata = staffGrantMetadata(target, grantType, amount, extra);
+        metadata.put("failure", failure);
+        StuffAuditEmitter.emitFailed(operation, StuffAuditEmitter.correlationId(), businessId,
+                StuffAuditEmitter.actorId(sender), target.getUniqueId(), null, "admin_give", metadata);
+    }
+
+    private static Map<String, Object> staffGrantMetadata(Player target, String grantType, int amount,
+                                                          Map<String, Object> extra) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("grant_type", grantType);
+        metadata.put("amount", amount);
+        metadata.put("delivery", "admin_give");
+        if (extra != null) metadata.putAll(extra);
+        metadata.putAll(StuffAuditEmitter.location(target));
+        return metadata;
     }
 
     private boolean handleLastSprint(CommandSender sender, String[] args) {
@@ -990,8 +1220,11 @@ public class MainCommand implements CommandExecutor {
                     return true;
                 }
                 List<ItemStack> kit = lastSprint.getRewardItems();
+                int kitAmount = ItemDelivery.totalAmount(kit);
                 // Flag before delivering so the first-join grant can never duplicate this kit.
                 if (!lastSprint.tryMarkGiftReceived(target.getUniqueId())) {
+                    emitStaffItemGrantFailed(sender, target, "kit.granted", "kit:last_sprint", "last_sprint_kit",
+                            kitAmount, "gift_flag_unsaved", Map.of("stack_count", kit.size(), "gift_flag_saved", false));
                     sender.sendMessage(Component.text("Warning: the Last Sprint gift flag for " + target.getName()
                                     + " could not be saved; the kit was not delivered.")
                             .color(NamedTextColor.YELLOW));
@@ -1001,12 +1234,18 @@ public class MainCommand implements CommandExecutor {
                 try {
                     kitDelivery = lastSprint.giveRewards(target, kit);
                 } catch (RuntimeException e) {
+                    StuffAuditEmitter.emitDeliveryException("kit.granted", StuffAuditEmitter.correlationId(),
+                            "kit:last_sprint", StuffAuditEmitter.actorId(sender), target.getUniqueId(),
+                            "admin_give", staffGrantMetadata(target, "last_sprint_kit", kitAmount,
+                                    Map.of("stack_count", kit.size(), "gift_flag_saved", true)), e);
                     sender.sendMessage(Component.text("Last Sprint kit delivery to " + target.getName()
                                     + " failed: " + e + ". The gift flag is set; use /mystuff lastsprint reset to allow another try.")
                             .color(NamedTextColor.RED));
                     PrettyLogger.error("Last Sprint kit delivery to " + target.getName() + " failed: " + e);
                     return true;
                 }
+                emitStaffItemGrant(sender, target, "kit.granted", "kit:last_sprint", "last_sprint_kit",
+                        kitDelivery, Map.of("stack_count", kit.size(), "gift_flag_saved", true));
                 if (reportUndelivered(sender, target, kitDelivery, "Last Sprint kit item(s)")) {
                     return true;
                 }
@@ -1016,7 +1255,7 @@ public class MainCommand implements CommandExecutor {
                         .append(Component.text("!").color(NamedTextColor.GREEN)));
                 target.sendMessage(Component.text("You've been given the Last Sprint starter kit by an admin!")
                         .color(NamedTextColor.GREEN));
-                PrettyLogger.info("Force-gave Last Sprint kit to " + target.getName() + " (by " + sender.getName() + ")");
+                PrettyLogger.debug("Force-gave Last Sprint kit to " + target.getName() + " (by " + sender.getName() + ")");
                 return true;
             }
             case "reset" -> {
@@ -1026,13 +1265,24 @@ public class MainCommand implements CommandExecutor {
                     return true;
                 }
                 if (args.length < 3) {
-                    sender.sendMessage(Component.text("Usage: /mystuff lastsprint reset <player>")
+                    sender.sendMessage(Component.text("Usage: /mystuff lastsprint reset <player> [reason]")
                             .color(NamedTextColor.RED));
                     return true;
                 }
                 Player target = Bukkit.getPlayer(args[2]);
                 if (target != null) {
-                    lastSprint.unmarkGiftReceived(target.getUniqueId());
+                    LastSprint.UnmarkResult reset = lastSprint.tryUnmarkGiftReceived(target.getUniqueId());
+                    Map<String, Object> resetValues = new LinkedHashMap<>();
+                    resetValues.put("target_name", target.getName());
+                    resetValues.put("had_gift_flag", reset.hadFlag());
+                    resetValues.put("gift_flag_saved", reset.saved());
+                    String resetReason = reasonArg(args, 3);
+                    if (resetReason != null) resetValues.put("admin_reason", resetReason);
+                    if (!reset.saved()) resetValues.put("failure", "write_error");
+                    resetValues.putAll(StuffAuditEmitter.location(target));
+                    StuffAuditEmitter.emitStaff(reset.saved() ? AuditOutcome.COMMITTED : AuditOutcome.FAILED,
+                            AuditRisk.HIGH, "kit.gift_reset", StuffAuditEmitter.correlationId(),
+                            "kit:last_sprint", sender, target.getUniqueId(), "admin_reset", resetValues);
                     sender.sendMessage(Component.text("Reset Last Sprint gift status for ")
                             .color(NamedTextColor.GREEN)
                             .append(Component.text(target.getName()).color(NamedTextColor.AQUA))
@@ -1049,7 +1299,9 @@ public class MainCommand implements CommandExecutor {
                             .color(NamedTextColor.RED));
                     return true;
                 }
+                boolean activeBefore = MysterriaStuff.getInstance().getConfigManager().isLastSprintActive();
                 MysterriaStuff.getInstance().getConfigManager().setLastSprintActive(true);
+                emitLastSprintToggle(sender, activeBefore, true);
                 sender.sendMessage(Component.text("Last Sprint is now ")
                         .color(NamedTextColor.GREEN)
                         .append(Component.text("ENABLED").color(NamedTextColor.GREEN).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD))
@@ -1063,7 +1315,9 @@ public class MainCommand implements CommandExecutor {
                             .color(NamedTextColor.RED));
                     return true;
                 }
+                boolean activeBefore = MysterriaStuff.getInstance().getConfigManager().isLastSprintActive();
                 MysterriaStuff.getInstance().getConfigManager().setLastSprintActive(false);
+                emitLastSprintToggle(sender, activeBefore, false);
                 sender.sendMessage(Component.text("Last Sprint is now ")
                         .color(NamedTextColor.YELLOW)
                         .append(Component.text("DISABLED").color(NamedTextColor.RED).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD))
@@ -1087,6 +1341,15 @@ public class MainCommand implements CommandExecutor {
                 return true;
             }
         }
+    }
+
+    /** Saving config.yml gives no completion signal, so this row is OBSERVED. */
+    private void emitLastSprintToggle(CommandSender sender, boolean activeBefore, boolean activeAfter) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("active_old", activeBefore);
+        values.put("active_new", activeAfter);
+        StuffAuditEmitter.emitStaff(AuditOutcome.OBSERVED, AuditRisk.NORMAL, "kit.autogrant_toggled",
+                StuffAuditEmitter.correlationId(), "kit:last_sprint", sender, null, "admin_toggle", values);
     }
 
     private boolean handleBooster(CommandSender sender, String[] args) {
@@ -1123,7 +1386,7 @@ public class MainCommand implements CommandExecutor {
             }
             case "grant" -> {
                 if (args.length < 3) {
-                    sender.sendMessage(Component.text("Usage: /mystuff booster grant <player>")
+                    sender.sendMessage(Component.text("Usage: /mystuff booster grant <player> [reason]")
                             .color(NamedTextColor.RED));
                     return true;
                 }
@@ -1133,12 +1396,12 @@ public class MainCommand implements CommandExecutor {
                             .color(NamedTextColor.RED));
                     return true;
                 }
-                bpl.forceGrantPatriarch(target, sender);
+                bpl.forceGrantPatriarch(target, sender, reasonArg(args, 3));
                 return true;
             }
             case "revoke" -> {
                 if (args.length < 3) {
-                    sender.sendMessage(Component.text("Usage: /mystuff booster revoke <player>")
+                    sender.sendMessage(Component.text("Usage: /mystuff booster revoke <player> [reason]")
                             .color(NamedTextColor.RED));
                     return true;
                 }
@@ -1148,11 +1411,11 @@ public class MainCommand implements CommandExecutor {
                             .color(NamedTextColor.RED));
                     return true;
                 }
-                bpl.forceRevokePatriarch(target, sender);
+                bpl.forceRevokePatriarch(target, sender, reasonArg(args, 3));
                 return true;
             }
             case "refresh" -> {
-                bpl.refreshBoosters();
+                bpl.refreshBoosters(sender);
                 sender.sendMessage(Component.text("Booster list refresh triggered (async). Check console for results.")
                         .color(NamedTextColor.GREEN));
                 return true;

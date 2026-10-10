@@ -3,7 +3,10 @@ package net.mysterria.stuff.features.coi;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import dev.ua.ikeepcalm.coi.api.CircleOfImaginationAPI;
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditOutcome;
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditRisk;
 import net.mysterria.stuff.MysterriaStuff;
+import net.mysterria.stuff.audit.StuffAuditEmitter;
 import net.mysterria.stuff.utils.PrettyLogger;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
@@ -23,13 +26,30 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class BoosterPatriarchListener implements Listener {
 
     private static final String BYPASS_PERMISSION = "mysterriastuff.patriarch.bypass";
+    private static final String BOOSTER_LIST_BUSINESS_ID = "boon:patriarch:booster_list";
+
+    /**
+     * Why a boon change is happening, carried to the audit rows. {@code requester} is the staff sender for
+     * admin triggers (null for automatic ones); a null correlation id is filled in only when a row is emitted.
+     */
+    private record Cause(String trigger, UUID correlationId, CommandSender requester, String adminReason) {
+        Cause withCorrelation() {
+            return correlationId != null ? this
+                    : new Cause(trigger, StuffAuditEmitter.correlationId(), requester, adminReason);
+        }
+    }
+
+    private static final Cause JOIN_CAUSE = new Cause("booster_join", null, null, null);
+    private static final Cause SYNC_CAUSE = new Cause("booster_sync", null, null, null);
 
     private final MysterriaStuff plugin;
     private final HttpClient httpClient;
@@ -56,7 +76,7 @@ public class BoosterPatriarchListener implements Listener {
 
         this.currentBoosters = ConcurrentHashMap.newKeySet();
 
-        fetchBoostersAsync();
+        fetchBoostersAsync(SYNC_CAUSE);
         startPeriodicUpdate();
 
         PrettyLogger.info("BoosterPatriarchListener initialized with " + updateIntervalSeconds + "s update interval");
@@ -67,21 +87,31 @@ public class BoosterPatriarchListener implements Listener {
     }
 
     public void refreshBoosters() {
-        fetchBoostersAsync();
+        fetchBoostersAsync(SYNC_CAUSE);
+    }
+
+    /** Staff-requested refresh: the grants and revokes it causes share one correlation id with its row. */
+    public void refreshBoosters(CommandSender requester) {
+        Cause cause = new Cause("admin_refresh", StuffAuditEmitter.correlationId(), requester, null);
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("known_booster_count", currentBoosters.size());
+        StuffAuditEmitter.emitStaff(AuditOutcome.OBSERVED, AuditRisk.HIGH, "boon.booster_refresh_requested",
+                cause.correlationId(), BOOSTER_LIST_BUSINESS_ID, requester, null, "admin_refresh", values);
+        fetchBoostersAsync(cause);
     }
 
     private void startPeriodicUpdate() {
         updateTask = new BukkitRunnable() {
             @Override
             public void run() {
-                fetchBoostersAsync();
+                fetchBoostersAsync(SYNC_CAUSE);
             }
         };
         updateTask.runTaskTimer(plugin, updateIntervalTicks, updateIntervalTicks);
         PrettyLogger.debug("Started periodic booster update task");
     }
 
-    private void fetchBoostersAsync() {
+    private void fetchBoostersAsync(Cause cause) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 HttpRequest request = HttpRequest.newBuilder()
@@ -94,7 +124,7 @@ public class BoosterPatriarchListener implements Listener {
 
                 if (response.statusCode() == 200) {
                     String[] boosters = gson.fromJson(response.body(), String[].class);
-                    updateBoosterList(boosters);
+                    updateBoosterList(boosters, cause.withCorrelation());
                     PrettyLogger.debug("Fetched " + boosters.length + " boosters from API");
                 } else {
                     PrettyLogger.warn("Failed to fetch boosters: HTTP " + response.statusCode());
@@ -107,7 +137,7 @@ public class BoosterPatriarchListener implements Listener {
         });
     }
 
-    private void updateBoosterList(String[] newBoosters) {
+    private void updateBoosterList(String[] newBoosters, Cause cause) {
         Set<String> newBoosterSet = new HashSet<>();
         for (String booster : newBoosters) {
             newBoosterSet.add(booster.toLowerCase());
@@ -122,6 +152,17 @@ public class BoosterPatriarchListener implements Listener {
         currentBoosters.clear();
         currentBoosters.addAll(newBoosterSet);
 
+        if (!addedBoosters.isEmpty() || !removedBoosters.isEmpty()) {
+            Map<String, Object> values = new LinkedHashMap<>();
+            values.put("trigger", cause.trigger());
+            values.put("added_count", addedBoosters.size());
+            values.put("removed_count", removedBoosters.size());
+            values.put("booster_count", newBoosterSet.size());
+            StuffAuditEmitter.emitStaff(AuditOutcome.OBSERVED, AuditRisk.NORMAL, "boon.booster_list_synced",
+                    cause.correlationId(), BOOSTER_LIST_BUSINESS_ID, cause.requester(), null,
+                    cause.trigger(), values);
+        }
+
         Bukkit.getScheduler().runTask(plugin, () -> {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 String playerName = player.getName().toLowerCase();
@@ -129,12 +170,12 @@ public class BoosterPatriarchListener implements Listener {
 
                 if (isBooster) {
                     if (shouldRemovePatriarchDueToBoon(player)) {
-                        removePatriarchRole(player, null);
+                        removePatriarchRole(player, null, cause, "too_many_boons");
                     } else {
-                        addPatriarchRole(player);
+                        addPatriarchRole(player, cause);
                     }
                 } else if (hasPatriarchInCoI(player)) {
-                    removePatriarchRole(player, null);
+                    removePatriarchRole(player, null, cause, "not_booster");
                 }
             }
 
@@ -154,16 +195,16 @@ public class BoosterPatriarchListener implements Listener {
 
         if (currentBoosters.contains(playerName)) {
             if (shouldRemovePatriarchDueToBoon(player)) {
-                removePatriarchRole(player, null);
+                removePatriarchRole(player, null, JOIN_CAUSE, "too_many_boons");
             } else {
-                addPatriarchRole(player);
+                addPatriarchRole(player, JOIN_CAUSE);
             }
         } else if (hasPatriarchInCoI(player)) {
-            removePatriarchRole(player, null);
+            removePatriarchRole(player, null, JOIN_CAUSE, "not_booster");
         }
     }
 
-    private void addPatriarchRole(Player player) {
+    private void addPatriarchRole(Player player, Cause cause) {
         String reason = checkShouldAddPatriarch(player);
         if (reason != null) {
             PrettyLogger.debug("Skipping patriarch for " + player.getName() + ": " + reason);
@@ -174,6 +215,7 @@ public class BoosterPatriarchListener implements Listener {
         String playerName = player.getName();
 
         boolean success = api.addPathwayOffline(player.getUniqueId(), "patriarch", 9);
+        emitBoonGrant(player, cause, success);
         if (success) {
             player.sendMessage(Component.text("As a server booster, you have been granted the Patriarch boon!").color(NamedTextColor.GOLD));
             PrettyLogger.debug("Added patriarch role to booster: " + playerName);
@@ -204,11 +246,16 @@ public class BoosterPatriarchListener implements Listener {
         return null;
     }
 
-    private void removePatriarchRole(Player player, CommandSender reporter) {
+    private void removePatriarchRole(Player player, CommandSender reporter, Cause cause, String removalCause) {
         String playerName = player.getName();
         String command = "coi outer remove " + playerName + " patriarch";
 
         boolean success = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+        // The CoI command gives no completion signal, so a dispatched removal is OBSERVED, not COMMITTED.
+        Map<String, Object> removal = new LinkedHashMap<>();
+        removal.put("removal_cause", removalCause);
+        emitBoon(success ? AuditOutcome.OBSERVED : AuditOutcome.FAILED, "boon.patriarch_revoked", player, cause,
+                success ? null : "command_dispatch_failed", removal);
         if (success) {
             player.sendMessage(Component.text("Your Patriarch boon has been removed.").color(NamedTextColor.RED));
             if (reporter != null) {
@@ -234,13 +281,20 @@ public class BoosterPatriarchListener implements Listener {
     }
 
     public void forceGrantPatriarch(Player player, CommandSender reporter) {
+        forceGrantPatriarch(player, reporter, null);
+    }
+
+    public void forceGrantPatriarch(Player player, CommandSender reporter, String adminReason) {
+        Cause cause = new Cause("admin_grant", StuffAuditEmitter.correlationId(), reporter, adminReason);
         CircleOfImaginationAPI api = plugin.getCoiAPI();
         if (api == null) {
+            emitBoon(AuditOutcome.FAILED, "boon.patriarch_granted", player, cause, "coi_api_unavailable", null);
             reporter.sendMessage(Component.text("CoI API is not available — cannot grant patriarch.").color(NamedTextColor.RED));
             return;
         }
 
         boolean success = api.addPathwayOffline(player.getUniqueId(), "patriarch", 9);
+        emitBoonGrant(player, cause, success);
         if (success) {
             player.sendMessage(Component.text("As a server booster, you have been granted the Patriarch boon!").color(NamedTextColor.GOLD));
             reporter.sendMessage(Component.text("Force-granted Patriarch to " + player.getName() + ".").color(NamedTextColor.GREEN));
@@ -252,7 +306,38 @@ public class BoosterPatriarchListener implements Listener {
     }
 
     public void forceRevokePatriarch(Player player, CommandSender reporter) {
-        removePatriarchRole(player, reporter);
+        forceRevokePatriarch(player, reporter, null);
+    }
+
+    public void forceRevokePatriarch(Player player, CommandSender reporter, String adminReason) {
+        removePatriarchRole(player, reporter,
+                new Cause("admin_revoke", StuffAuditEmitter.correlationId(), reporter, adminReason),
+                "admin_revoke");
+    }
+
+    /** addPathwayOffline writes the player file before it returns, so true means the grant is saved. */
+    private void emitBoonGrant(Player player, Cause cause, boolean success) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("sequence", 9);
+        emitBoon(success ? AuditOutcome.COMMITTED : AuditOutcome.FAILED, "boon.patriarch_granted", player, cause,
+                success ? null : "coi_api_returned_false", values);
+    }
+
+    /** Safe on the main thread: only plain values already in hand are read. */
+    private void emitBoon(AuditOutcome outcome, String operation, Player player, Cause cause,
+                          String failure, Map<String, Object> extra) {
+        Cause traced = cause.withCorrelation();
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("boon", "patriarch");
+        values.put("target_name", player.getName());
+        values.put("trigger", traced.trigger());
+        if (traced.adminReason() != null) values.put("admin_reason", traced.adminReason());
+        if (failure != null) values.put("failure", failure);
+        if (extra != null) values.putAll(extra);
+        values.putAll(StuffAuditEmitter.location(player));
+        StuffAuditEmitter.emitStaff(outcome, traced.requester() != null ? AuditRisk.HIGH : AuditRisk.NORMAL,
+                operation, traced.correlationId(), "boon:patriarch:" + player.getUniqueId(),
+                traced.requester(), player.getUniqueId(), traced.trigger(), values);
     }
 
     public void sendDiagnostics(Player player, CommandSender reporter) {

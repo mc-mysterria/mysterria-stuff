@@ -6,17 +6,22 @@ import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.title.Title;
 import net.mysterria.stuff.MysterriaStuff;
+import net.mysterria.stuff.audit.StuffAuditEmitter;
 import net.mysterria.stuff.utils.ItemDelivery;
 import net.mysterria.stuff.utils.PrettyLogger;
 import org.bukkit.Bukkit;
 import org.bukkit.Sound;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
 
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 public class LastSprintListener implements Listener {
 
@@ -45,8 +50,14 @@ public class LastSprintListener implements Listener {
             if (lastSprint.hasReceivedGift(player.getUniqueId())) return;
 
             List<ItemStack> kit = lastSprint.getRewardItems();
+            int kitAmount = ItemDelivery.totalAmount(kit);
+            UUID correlationId = StuffAuditEmitter.correlationId();
             // Flag before delivering so the kit can never be granted twice.
             if (!lastSprint.tryMarkGiftReceived(player.getUniqueId())) {
+                Map<String, Object> metadata = autoGrantMetadata(player, kit.size(), kitAmount, false);
+                metadata.put("failure", "gift_flag_unsaved");
+                StuffAuditEmitter.emitFailed("kit.granted", correlationId, "kit:last_sprint",
+                        null, player.getUniqueId(), null, "first_join", metadata);
                 PrettyLogger.warn("Last Sprint gift flag for " + player.getName()
                         + " could not be saved; the kit was not delivered");
                 return;
@@ -55,11 +66,17 @@ public class LastSprintListener implements Listener {
             try {
                 delivery = lastSprint.giveRewards(player, kit);
             } catch (RuntimeException e) {
+                StuffAuditEmitter.emitDeliveryException("kit.granted", correlationId, "kit:last_sprint",
+                        null, player.getUniqueId(), "first_join",
+                        autoGrantMetadata(player, kit.size(), kitAmount, true), e);
                 player.sendMessage(Component.text("Your Last Sprint starter kit could not be delivered. Please contact staff.")
                         .color(NamedTextColor.RED));
                 PrettyLogger.error("Last Sprint kit delivery for " + player.getName() + " failed: " + e);
                 return;
             }
+            StuffAuditEmitter.emitDelivery("kit.granted", correlationId, "kit:last_sprint",
+                    null, player.getUniqueId(), "first_join", delivery,
+                    autoGrantMetadata(player, kit.size(), delivery.requestedAmount(), true));
 
             if (!delivery.complete()) {
                 player.sendMessage(Component.text("Your Last Sprint starter kit could not be fully delivered. Please contact staff.")
@@ -113,4 +130,16 @@ public class LastSprintListener implements Listener {
         }, 20L);
     }
 
+    private static Map<String, Object> autoGrantMetadata(Player player, int stackCount, int amount,
+                                                         boolean flagSaved) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("actor_name", "system");
+        metadata.put("grant_type", "last_sprint_kit");
+        metadata.put("amount", amount);
+        metadata.put("delivery", "first_join");
+        metadata.put("stack_count", stackCount);
+        metadata.put("gift_flag_saved", flagSaved);
+        metadata.putAll(StuffAuditEmitter.location(player));
+        return metadata;
+    }
 }

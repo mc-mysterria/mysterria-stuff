@@ -39,6 +39,11 @@ dependencies {
     compileOnly("de.skyslycer.hmcwraps:api:1.7.0")
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
     compileOnly("it.pino.zelchat:zelchat-api:2.0.0-pre-27")
+    implementation 'dev.ua.ikeepcalm.mysterria:audit-client:1.0.2'
+}
+
+shadowJar {
+    relocate 'dev.ua.ikeepcalm.mysterria.audit', 'net.mysterria.stuff.libs.audit'
 }
 
 tasks {

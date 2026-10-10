@@ -1,9 +1,12 @@
 package net.mysterria.stuff.features.lastsprint;
 
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditOutcome;
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditRisk;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import net.mysterria.stuff.audit.StuffAuditEmitter;
 import net.mysterria.stuff.utils.PrettyLogger;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -19,7 +22,9 @@ import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -97,7 +102,7 @@ public class LastSprintGUI implements Listener {
         if (!(event.getPlayer() instanceof Player player)) return;
         if (!viewers.remove(player.getUniqueId())) return;
 
-        saveRewards(event.getInventory());
+        saveRewards(player, event.getInventory());
         player.sendMessage(Component.text("Last Sprint rewards saved!")
                 .color(NamedTextColor.GREEN)
                 .decoration(TextDecoration.ITALIC, false));
@@ -106,14 +111,14 @@ public class LastSprintGUI implements Listener {
     private void saveAndClose(Player player, Inventory inv) {
         // Remove from viewers before closing so onInventoryClose doesn't double-save
         viewers.remove(player.getUniqueId());
-        saveRewards(inv);
+        saveRewards(player, inv);
         player.closeInventory();
         player.sendMessage(Component.text("Last Sprint rewards saved!")
                 .color(NamedTextColor.GREEN)
                 .decoration(TextDecoration.ITALIC, false));
     }
 
-    private void saveRewards(Inventory inv) {
+    private void saveRewards(Player player, Inventory inv) {
         List<ItemStack> rewards = new ArrayList<>();
         for (int i = 0; i < REWARD_SLOTS; i++) {
             ItemStack item = inv.getItem(i);
@@ -121,7 +126,14 @@ public class LastSprintGUI implements Listener {
                 rewards.add(item.clone());
             }
         }
-        lastSprint.setRewardItems(rewards);
+        Map<String, Object> values = new LinkedHashMap<>(
+                StuffAuditEmitter.kitSummary("old", lastSprint.peekRewardItems()));
+        boolean saved = lastSprint.setRewardItems(rewards);
+        values.putAll(StuffAuditEmitter.kitSummary("new", rewards));
+        if (!saved) values.put("failure", "write_error");
+        StuffAuditEmitter.emitStaff(saved ? AuditOutcome.COMMITTED : AuditOutcome.FAILED, AuditRisk.HIGH,
+                "kit.rewards_updated", StuffAuditEmitter.correlationId(), "kit:last_sprint",
+                player, null, "admin_setup", values);
     }
 
     private void clearSlots(Inventory inv) {

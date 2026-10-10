@@ -9,6 +9,8 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.mysterria.stuff.features.hmcwraps.UniversalTokenManager;
+import net.mysterria.stuff.audit.ItemIdentity;
+import net.mysterria.stuff.audit.StuffAuditEmitter;
 import net.mysterria.stuff.utils.AdventureUtil;
 import net.mysterria.stuff.utils.ItemDelivery;
 import net.mysterria.stuff.utils.PrettyLogger;
@@ -20,9 +22,18 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
 
 
 public class WrapConfirmationGUI {
+
+    private static final long PREVIEW_UNAVAILABLE_WINDOW_MS = 10 * 60_000L;
+    private static final int PREVIEW_UNAVAILABLE_PRUNE_SIZE = 256;
+    /** player|wrap -> last preview_unavailable row time; GUI callbacks run on the main thread. */
+    private static final Map<String, Long> PREVIEW_UNAVAILABLE = new HashMap<>();
 
     private final UniversalTokenManager manager;
     private final MiniMessage miniMessage;
@@ -48,6 +59,7 @@ public class WrapConfirmationGUI {
                 player.sendMessage(Component.text("Error: This wrap has no physical item configured.", NamedTextColor.RED));
                 player.sendMessage(Component.text("Please contact staff about wrap: " + wrap.getWrapName(), NamedTextColor.YELLOW));
                 PrettyLogger.warn("Wrap '" + wrap.getWrapName() + "' has null physical item");
+                emitPreviewUnavailable(player, wrap, "wrap_physical_missing");
                 return;
             }
             wrapItem = wrap.getPhysical().toItem(hmcWraps, player);
@@ -55,6 +67,7 @@ public class WrapConfirmationGUI {
             player.sendMessage(Component.text("Error: Failed to load wrap item.", NamedTextColor.RED));
             player.sendMessage(Component.text("Please contact staff about wrap: " + wrap.getWrapName(), NamedTextColor.YELLOW));
             PrettyLogger.warn("Failed to get physical item for wrap '" + wrap.getWrapName() + "': " + e.getMessage());
+            emitPreviewUnavailable(player, wrap, "wrapper_creation_failed");
             return;
         }
 
@@ -117,47 +130,82 @@ public class WrapConfirmationGUI {
             return;
         }
 
+        UUID correlationId = StuffAuditEmitter.correlationId();
+        // Snapshot before consumption: consumeToken decrements the stack in place.
+        String tokenMaterial = heldItem.getType().getKey().toString();
+
         if (!manager.consumeToken(heldItem, 1)) {
             player.sendMessage(manager.getMessage("no-token-in-hand"));
             return;
         }
 
+        Map<String, Object> consumed = new LinkedHashMap<>(
+                StuffAuditEmitter.tokenMetadata("universal", 1, "wrap_exchange"));
+        consumed.put("material", tokenMaterial);
+        consumed.putAll(StuffAuditEmitter.location(player));
+        StuffAuditEmitter.emit("token.consumed", correlationId,
+                StuffAuditEmitter.tokenBusinessId("universal"), player.getUniqueId(),
+                player.getUniqueId(), null, "wrap_exchange", consumed);
+
         ItemStack wrapperItem = null;
+        String loaderWrapId = null;
+        String failure = "wrapper_tagging_failed";
         try {
             if (wrap.getPhysical() == null) {
                 player.sendMessage(Component.text("Error: This wrap has no physical item configured.", NamedTextColor.RED));
                 player.sendMessage(Component.text("Please contact staff about wrap: " + wrap.getWrapName(), NamedTextColor.YELLOW));
                 PrettyLogger.warn("Wrap '" + wrap.getWrapName() + "' has null physical item during exchange");
 
-                refundToken(player);
+                abortExchange(player, wrap, correlationId, "wrap_physical_missing");
                 return;
             }
             wrapperItem = wrap.getPhysical().toItem(hmcWraps, player);
 
 
             // HMCWraps does not recognise a wrapper without the tag
-            if (!addWrapperPDC(wrapperItem, wrap, hmcWraps)) {
-                wrapperItem = null;
-            }
+            loaderWrapId = addWrapperPDC(wrapperItem, wrap, hmcWraps);
         } catch (Exception e) {
             PrettyLogger.warn("Failed to get physical item for wrap '" + wrap.getWrapName() + "' during exchange: " + e.getMessage());
+            failure = "wrapper_creation_failed";
         }
 
-        if (wrapperItem == null) {
-            player.sendMessage(Component.text("Error: Failed to create wrap item.", NamedTextColor.RED));
-            player.sendMessage(Component.text("Please contact staff about wrap: " + wrap.getWrapName(), NamedTextColor.YELLOW));
-            refundToken(player);
+        if (loaderWrapId == null) {
+            abortCreation(player, wrap, correlationId, failure);
             return;
         }
 
-        ItemDelivery.Result delivery = ItemDelivery.deliver(player, wrapperItem);
+        deliverWrapper(player, wrap, wrapperItem, loaderWrapId, correlationId);
+    }
+
+    private void deliverWrapper(Player player, Wrap wrap, ItemStack wrapperItem, String loaderWrapId,
+                                UUID correlationId) {
+        String effectiveWrapId = resolveWrapId(wrap, loaderWrapId);
+        String wrapperUuid = ItemIdentity.stampShop(wrapperItem);
+        // Snapshot before delivery: Inventory.addItem may mutate the passed stack.
+        String itemType = wrapperItem.getType().getKey().toString();
+        int itemAmount = wrapperItem.getAmount();
+        String businessId = StuffAuditEmitter.wrapBusinessId(effectiveWrapId, wrap.getWrapName());
+        Map<String, Object> metadata = unlockMetadata(player, wrap, effectiveWrapId, itemType, itemAmount,
+                wrapperUuid);
+
+        ItemDelivery.Result delivery;
+        try {
+            delivery = ItemDelivery.deliver(player, wrapperItem);
+        } catch (RuntimeException e) {
+            StuffAuditEmitter.emitDeliveryException("cosmetic.unlocked", correlationId, businessId,
+                    player.getUniqueId(), player.getUniqueId(), "universal_token_exchange", metadata, e);
+            throw e;
+        }
+        StuffAuditEmitter.emitDelivery("cosmetic.unlocked", correlationId, businessId, player.getUniqueId(),
+                player.getUniqueId(), "universal_token_exchange", delivery, metadata);
+
         if (!delivery.complete()) {
             // Another plugin blocked the drop and the token is already consumed.
             player.sendMessage(Component.text("Error: The wrap item could not be delivered.", NamedTextColor.RED));
             player.sendMessage(Component.text("Please contact staff about wrap: " + wrap.getWrapName(), NamedTextColor.YELLOW));
             PrettyLogger.warn("Wrapper for wrap '" + wrap.getWrapName() + "' could not be delivered to " + player.getName());
             if (!delivery.anyDelivered()) {
-                refundToken(player);
+                refundToken(player, correlationId);
             }
             return;
         }
@@ -172,8 +220,53 @@ public class WrapConfirmationGUI {
         PrettyLogger.debug(player.getName() + " exchanged a token for wrap: " + wrapName);
     }
 
-    private void refundToken(Player player) {
-        if (ItemDelivery.deliver(player, manager.createToken(1)).complete()) {
+    private Map<String, Object> unlockMetadata(Player player, Wrap wrap, String effectiveWrapId,
+                                               String itemType, int itemAmount,
+                                               String wrapperUuid) {
+        Map<String, Object> metadata = new LinkedHashMap<>(StuffAuditEmitter.wrapMetadata(
+                effectiveWrapId, wrap.getWrapName(), itemType, itemAmount, true));
+        metadata.put("delivery", "universal_token_exchange");
+        if (wrapperUuid != null) {
+            metadata.put("item_uuid", wrapperUuid);
+            metadata.put("item_uuid_scope", ItemIdentity.SCOPE_INSTANCE);
+            metadata.put("item_origin", ItemIdentity.ORIGIN_SHOP);
+        } else {
+            metadata.putAll(ItemIdentity.lotMetadata(ItemIdentity.ORIGIN_SHOP, null, itemAmount));
+        }
+        metadata.putAll(StuffAuditEmitter.location(player));
+        return metadata;
+    }
+
+    private void abortCreation(Player player, Wrap wrap, UUID correlationId, String reason) {
+        player.sendMessage(Component.text("Error: Failed to create wrap item.", NamedTextColor.RED));
+        player.sendMessage(Component.text("Please contact staff about wrap: " + wrap.getWrapName(), NamedTextColor.YELLOW));
+        abortExchange(player, wrap, correlationId, reason);
+    }
+
+    private void abortExchange(Player player, Wrap wrap, UUID correlationId, String reason) {
+        emitUnlockFailed(player, wrap, correlationId, reason);
+        refundToken(player, correlationId);
+    }
+
+    private void refundToken(Player player, UUID correlationId) {
+        ItemStack token = manager.createToken(1);
+        // Refund tokens stay unstamped so they keep stacking with existing tokens; the lot uuid is row-only.
+        Map<String, Object> lot = ItemIdentity.lotMetadata(ItemIdentity.ORIGIN_SHOP, null, 1);
+        Map<String, Object> metadata = new LinkedHashMap<>(StuffAuditEmitter.tokenMetadata("universal", 1, "wrap_exchange_refund"));
+        metadata.putAll(lot);
+        metadata.putAll(StuffAuditEmitter.location(player));
+        String businessId = StuffAuditEmitter.tokenBusinessId("universal");
+        ItemDelivery.Result delivery;
+        try {
+            delivery = ItemDelivery.deliver(player, token);
+        } catch (RuntimeException e) {
+            StuffAuditEmitter.emitDeliveryException("token.granted", correlationId, businessId,
+                    player.getUniqueId(), player.getUniqueId(), "wrap_exchange_refund", metadata, e);
+            throw e;
+        }
+        StuffAuditEmitter.emitDelivery("token.granted", correlationId, businessId, player.getUniqueId(),
+                player.getUniqueId(), "wrap_exchange_refund", delivery, metadata);
+        if (delivery.complete()) {
             player.sendMessage(Component.text("Your token has been refunded.", NamedTextColor.GREEN));
         } else {
             player.sendMessage(Component.text("Your token refund could not be delivered. Please contact staff.",
@@ -182,12 +275,53 @@ public class WrapConfirmationGUI {
         }
     }
 
-    /** @return false if the wrapper could not be tagged */
-    private boolean addWrapperPDC(ItemStack item, Wrap wrap, HMCWraps hmcWraps) {
+    /** A preview is not an exchange attempt, so it is traced as OBSERVED LOW, not a FAILED unlock. */
+    private void emitPreviewUnavailable(Player player, Wrap wrap, String reason) {
+        long now = System.currentTimeMillis();
+        String key = player.getUniqueId() + "|" + wrap.getWrapName();
+        if (PREVIEW_UNAVAILABLE.size() > PREVIEW_UNAVAILABLE_PRUNE_SIZE) {
+            PREVIEW_UNAVAILABLE.values().removeIf(last -> now - last >= PREVIEW_UNAVAILABLE_WINDOW_MS);
+        }
+        Long last = PREVIEW_UNAVAILABLE.get(key);
+        if (last != null && now - last < PREVIEW_UNAVAILABLE_WINDOW_MS) return;
+        PREVIEW_UNAVAILABLE.put(key, now);
+
+        String wrapId = resolveWrapId(wrap, null);
+        Map<String, Object> metadata = new LinkedHashMap<>(StuffAuditEmitter.wrapMetadata(
+                wrapId, wrap.getWrapName(), null, 0, true));
+        metadata.put("unavailable_reason", reason);
+        metadata.putAll(StuffAuditEmitter.location(player));
+        StuffAuditEmitter.emitObservedLow("cosmetic.preview_unavailable", StuffAuditEmitter.correlationId(),
+                StuffAuditEmitter.wrapBusinessId(wrapId, wrap.getWrapName()), player.getUniqueId(),
+                player.getUniqueId(), reason, metadata);
+    }
+
+    /** Only called once an exchange was actually attempted (the token has been consumed). */
+    private void emitUnlockFailed(Player player, Wrap wrap, UUID correlationId, String reason) {
+        String wrapId = resolveWrapId(wrap, null);
+        Map<String, Object> metadata = new LinkedHashMap<>(StuffAuditEmitter.wrapMetadata(
+                wrapId, wrap.getWrapName(), null, 0, true));
+        metadata.put("delivery", "universal_token_exchange");
+        metadata.put("failure", reason);
+        metadata.put("failure_stage", "exchange");
+        metadata.putAll(StuffAuditEmitter.location(player));
+        StuffAuditEmitter.emitFailed("cosmetic.unlocked", correlationId,
+                StuffAuditEmitter.wrapBusinessId(wrapId, wrap.getWrapName()), player.getUniqueId(),
+                player.getUniqueId(), null, reason, metadata);
+    }
+
+    private String resolveWrapId(Wrap wrap, String loaderWrapId) {
+        String wrapId = wrap.getUuid();
+        if (wrapId == null || wrapId.isBlank()) wrapId = loaderWrapId;
+        if (wrapId == null || wrapId.isBlank()) wrapId = wrap.getWrapName();
+        return wrapId;
+    }
+
+    private String addWrapperPDC(ItemStack item, Wrap wrap, HMCWraps hmcWraps) {
         ItemMeta meta = item.getItemMeta();
         if (meta == null) {
             PrettyLogger.warn("Cannot add wrapper PDC - item meta is null for wrap: " + wrap.getWrapName());
-            return false;
+            return null;
         }
 
         try {
@@ -201,7 +335,7 @@ public class WrapConfirmationGUI {
 
             if (wrapIdentifier == null) {
                 PrettyLogger.warn("Could not find wrap identifier for wrap: " + wrap.getWrapName());
-                return false;
+                return null;
             }
 
             NamespacedKey key = new NamespacedKey("hmcwraps", "wrapper");
@@ -210,10 +344,10 @@ public class WrapConfirmationGUI {
             item.setItemMeta(meta);
 
             PrettyLogger.debug("Added wrapper PDC to item - Key: " + wrapIdentifier + " for wrap: " + wrap.getWrapName());
-            return true;
+            return wrapIdentifier;
         } catch (Exception e) {
             PrettyLogger.warn("Failed to add wrapper PDC for wrap '" + wrap.getWrapName() + "': " + e.getMessage());
-            return false;
+            return null;
         }
     }
 }

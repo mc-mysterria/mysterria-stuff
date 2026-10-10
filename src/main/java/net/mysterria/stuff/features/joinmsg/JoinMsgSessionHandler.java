@@ -8,6 +8,8 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.mysterria.stuff.MysterriaStuff;
+import net.mysterria.stuff.audit.ItemIdentity;
+import net.mysterria.stuff.audit.StuffAuditEmitter;
 import net.mysterria.stuff.utils.AdventureUtil;
 import net.mysterria.stuff.utils.ItemDelivery;
 import org.bukkit.entity.Player;
@@ -17,6 +19,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,14 +41,14 @@ public class JoinMsgSessionHandler implements Listener {
     }
 
 
-    public void startSession(Player player) {
+    public void startSession(Player player, UUID correlationId) {
         UUID playerId = player.getUniqueId();
 
 
         activeSessions.remove(playerId);
 
 
-        PlayerSession session = new PlayerSession(player);
+        PlayerSession session = new PlayerSession(player, correlationId);
         activeSessions.put(playerId, session);
 
 
@@ -77,23 +80,25 @@ public class JoinMsgSessionHandler implements Listener {
 
 
         String message = PlainTextComponentSerializer.plainText().serialize(event.message());
+        // Hashed here, off the main thread, for the audit row.
+        String messageSha256 = StuffAuditEmitter.sha256(message);
 
 
         plugin.getServer().getScheduler().runTask(plugin, () -> {
             // The session may have been cancelled or replaced in the meantime.
             if (activeSessions.get(playerId) != session) return;
-            processSessionMessage(player, session, message);
+            processSessionMessage(player, session, message, messageSha256);
         });
     }
 
 
-    private void processSessionMessage(Player player, PlayerSession session, String message) {
+    private void processSessionMessage(Player player, PlayerSession session, String message, String messageSha256) {
         switch (session.getState()) {
             case AWAITING_JOIN_MESSAGE:
-                handleJoinMessage(player, session, message);
+                handleJoinMessage(player, session, message, messageSha256);
                 break;
             case AWAITING_QUIT_MESSAGE:
-                handleQuitMessage(player, session, message);
+                handleQuitMessage(player, session, message, messageSha256);
                 break;
             case AWAITING_CONFIRMATION:
 
@@ -103,7 +108,7 @@ public class JoinMsgSessionHandler implements Listener {
     }
 
 
-    private void handleJoinMessage(Player player, PlayerSession session, String message) {
+    private void handleJoinMessage(Player player, PlayerSession session, String message, String messageSha256) {
 
         if (!message.contains("%player%")) {
             player.sendMessage(manager.getMessage("join-missing-placeholder"));
@@ -113,7 +118,7 @@ public class JoinMsgSessionHandler implements Listener {
         }
 
 
-        session.setJoinMessage(message);
+        session.setJoinMessage(message, messageSha256);
         session.setState(SessionState.AWAITING_QUIT_MESSAGE);
 
 
@@ -126,7 +131,7 @@ public class JoinMsgSessionHandler implements Listener {
     }
 
 
-    private void handleQuitMessage(Player player, PlayerSession session, String message) {
+    private void handleQuitMessage(Player player, PlayerSession session, String message, String messageSha256) {
 
         if (!message.contains("%player%")) {
             player.sendMessage(manager.getMessage("quit-missing-placeholder"));
@@ -136,7 +141,7 @@ public class JoinMsgSessionHandler implements Listener {
         }
 
 
-        session.setQuitMessage(message);
+        session.setQuitMessage(message, messageSha256);
         session.setState(SessionState.AWAITING_CONFIRMATION);
 
 
@@ -245,11 +250,35 @@ public class JoinMsgSessionHandler implements Listener {
             case MISSING_PLACEHOLDER_QUIT -> player.sendMessage(manager.getMessage("quit-missing-placeholder"));
             case WRITE_ERROR -> player.sendMessage(manager.getMessage("write-error"));
         }
+        emitMessageSet(player, session, result);
         if (result != JoinMsgStore.SetResult.OK) {
             // The token is already spent: keep the session so the player can retry or cancel for a refund.
             player.sendMessage(Component.empty());
             sendCancelButton(player);
             sendRestartButton(player);
+        }
+    }
+
+    private void emitMessageSet(Player player, PlayerSession session, JoinMsgStore.SetResult result) {
+        UUID playerId = player.getUniqueId();
+        String joinMessage = session.getJoinMessage();
+        String quitMessage = session.getQuitMessage();
+        String messageType = joinMessage != null && quitMessage != null
+                ? "join_and_quit" : joinMessage != null ? "join" : "quit";
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("message_type", messageType);
+        metadata.put("target_name", player.getName());
+        if (joinMessage != null) metadata.put("join_message_sha256", session.getJoinMessageSha256());
+        if (quitMessage != null) metadata.put("quit_message_sha256", session.getQuitMessageSha256());
+        metadata.putAll(StuffAuditEmitter.location(player));
+        String businessId = "joinmsg:" + playerId;
+        if (result == JoinMsgStore.SetResult.OK) {
+            StuffAuditEmitter.emit("joinmsg.message_set", session.getCorrelationId(),
+                    businessId, playerId, playerId, null, "self_service", metadata);
+        } else if (result == JoinMsgStore.SetResult.WRITE_ERROR) {
+            metadata.put("failure", "write_error");
+            StuffAuditEmitter.emitFailed("joinmsg.message_set", session.getCorrelationId(),
+                    businessId, playerId, playerId, null, "self_service", metadata);
         }
     }
 
@@ -259,14 +288,32 @@ public class JoinMsgSessionHandler implements Listener {
 
 
         // Removing the session is what claims the refund, so it can only be paid once.
-        if (activeSessions.remove(playerId) == null) {
+        PlayerSession session = activeSessions.remove(playerId);
+        if (session == null) {
             player.sendMessage(manager.getMessage("no-active-session"));
             return;
         }
 
 
         ItemStack token = manager.createToken(1);
-        ItemDelivery.Result delivery = ItemDelivery.deliver(player, token);
+        // Refund tokens stay unstamped so they keep stacking with existing tokens; the lot uuid is row-only.
+        Map<String, Object> lot = ItemIdentity.lotMetadata(ItemIdentity.ORIGIN_SHOP, null, 1);
+        Map<String, Object> metadata = new LinkedHashMap<>(
+                StuffAuditEmitter.tokenMetadata("joinmsg", 1, "joinmsg_session_cancelled"));
+        metadata.putAll(lot);
+        metadata.putAll(StuffAuditEmitter.location(player));
+        String businessId = StuffAuditEmitter.tokenBusinessId("joinmsg");
+        ItemDelivery.Result delivery;
+        try {
+            delivery = ItemDelivery.deliver(player, token);
+        } catch (RuntimeException e) {
+            StuffAuditEmitter.emitDeliveryException("token.granted", session.getCorrelationId(), businessId,
+                    player.getUniqueId(), player.getUniqueId(), "joinmsg_session_cancelled", metadata, e);
+            throw e;
+        }
+
+        StuffAuditEmitter.emitDelivery("token.granted", session.getCorrelationId(), businessId,
+                player.getUniqueId(), player.getUniqueId(), "joinmsg_session_cancelled", delivery, metadata);
 
 
         player.sendMessage(manager.getMessage("session-cancelled"));
@@ -282,7 +329,8 @@ public class JoinMsgSessionHandler implements Listener {
     public void handleRestart(Player player) {
         UUID playerId = player.getUniqueId();
 
-        if (activeSessions.remove(playerId) == null) {
+        PlayerSession session = activeSessions.remove(playerId);
+        if (session == null) {
             player.sendMessage(manager.getMessage("no-active-session"));
             return;
         }
@@ -291,7 +339,7 @@ public class JoinMsgSessionHandler implements Listener {
         player.sendMessage(manager.getMessage("session-restarted"));
 
 
-        startSession(player);
+        startSession(player, session.getCorrelationId());
     }
 
 
@@ -315,17 +363,25 @@ public class JoinMsgSessionHandler implements Listener {
 
     private static class PlayerSession {
         private final Player player;
+        private final UUID correlationId;
         private SessionState state;
         private String joinMessage;
         private String quitMessage;
+        private String joinMessageSha256;
+        private String quitMessageSha256;
 
-        public PlayerSession(Player player) {
+        public PlayerSession(Player player, UUID correlationId) {
             this.player = player;
+            this.correlationId = correlationId;
             this.state = SessionState.AWAITING_JOIN_MESSAGE;
         }
 
         public Player getPlayer() {
             return player;
+        }
+
+        public UUID getCorrelationId() {
+            return correlationId;
         }
 
         public SessionState getState() {
@@ -340,16 +396,26 @@ public class JoinMsgSessionHandler implements Listener {
             return joinMessage;
         }
 
-        public void setJoinMessage(String joinMessage) {
+        public void setJoinMessage(String joinMessage, String sha256) {
             this.joinMessage = joinMessage;
+            this.joinMessageSha256 = sha256;
+        }
+
+        public String getJoinMessageSha256() {
+            return joinMessageSha256;
         }
 
         public String getQuitMessage() {
             return quitMessage;
         }
 
-        public void setQuitMessage(String quitMessage) {
+        public void setQuitMessage(String quitMessage, String sha256) {
             this.quitMessage = quitMessage;
+            this.quitMessageSha256 = sha256;
+        }
+
+        public String getQuitMessageSha256() {
+            return quitMessageSha256;
         }
     }
 }

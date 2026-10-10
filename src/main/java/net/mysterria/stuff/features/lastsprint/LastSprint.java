@@ -12,6 +12,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -98,9 +99,18 @@ public class LastSprint {
         return false;
     }
 
+    /** What {@link #tryUnmarkGiftReceived} found and whether the cleared flag was saved. */
+    public record UnmarkResult(boolean hadFlag, boolean saved) {
+    }
+
     public void unmarkGiftReceived(UUID uuid) {
-        giftedPlayers.remove(uuid);
-        save();
+        tryUnmarkGiftReceived(uuid);
+    }
+
+    /** Same as {@link #unmarkGiftReceived}, but reports the previous flag and the save result. */
+    public UnmarkResult tryUnmarkGiftReceived(UUID uuid) {
+        boolean hadFlag = giftedPlayers.remove(uuid);
+        return new UnmarkResult(hadFlag, save());
     }
 
     public List<ItemStack> getRewardItems() {
@@ -111,11 +121,18 @@ public class LastSprint {
         return clones;
     }
 
-    public void setRewardItems(List<ItemStack> items) {
+    /** Read-only view of the stored kit, without cloning; callers must not modify the stacks. */
+    public List<ItemStack> peekRewardItems() {
+        return Collections.unmodifiableList(rewardItems);
+    }
+
+    /** @return whether the new kit was saved to disk */
+    public boolean setRewardItems(List<ItemStack> items) {
         rewardItems.clear();
         rewardItems.addAll(items);
-        save();
+        boolean saved = save();
         PrettyLogger.info("Last Sprint rewards updated: " + rewardItems.size() + " item(s)");
+        return saved;
     }
 
     public int getRewardCount() {
