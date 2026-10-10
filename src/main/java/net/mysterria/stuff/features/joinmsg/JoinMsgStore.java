@@ -5,6 +5,7 @@ import net.mysterria.stuff.utils.PrettyLogger;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
@@ -44,6 +45,12 @@ public class JoinMsgStore {
         WRITE_ERROR
     }
 
+    public enum RemoveResult {
+        REMOVED,
+        NOTHING_REMOVED,
+        WRITE_ERROR
+    }
+
     public static class MessageEntry {
         public final UUID uuid;
         public String name;
@@ -66,37 +73,78 @@ public class JoinMsgStore {
     private String defaultJoinMessage;
     private String defaultQuitMessage;
     private String firstJoinMessage;
+    /** Set when the store file or legacy files could not be read; save() refuses to overwrite them. */
+    private boolean loadFailed;
 
     public JoinMsgStore(MysterriaStuff plugin) {
         this.plugin = plugin;
-        load();
+        tryLoad();
     }
 
     // ---------------------------------------------------------------
     // Loading / saving
     // ---------------------------------------------------------------
 
-    public void load() {
-        byUuid.clear();
-        pending.clear();
-        defaultJoinMessage = null;
-        defaultQuitMessage = null;
-        firstJoinMessage = null;
-
-        File file = getStoreFile();
-        if (!file.exists()) {
-            if (!migrateLegacyFormat()) {
-                PrettyLogger.info("No join/quit message store found, starting fresh");
-                return;
-            }
-        } else {
-            readFrom(YamlConfiguration.loadConfiguration(file));
+    /**
+     * Loads the store from disk.
+     *
+     * @return false if the files could not be read; the in-memory state is kept and saving is
+     *         blocked until a later load succeeds
+     */
+    public boolean tryLoad() {
+        Snapshot before = snapshot();
+        try {
+            return readFromDisk();
+        } catch (RuntimeException e) {
+            restore(before);
+            loadFailed = true;
+            PrettyLogger.warn("Failed to load join/quit message store, refusing to overwrite it: " + e);
+            return false;
         }
+    }
+
+    private boolean readFromDisk() {
+        File file = getStoreFile();
+        if (file.exists()) {
+            // loadConfiguration() swallows parse errors and returns an empty config, which would
+            // wipe the live state and let the next save() overwrite the file and its .bak.
+            YamlConfiguration yaml = new YamlConfiguration();
+            try {
+                yaml.load(file);
+            } catch (IOException | InvalidConfigurationException e) {
+                loadFailed = true;
+                PrettyLogger.warn("Failed to read join/quit message store, refusing to overwrite it: " + e.getMessage());
+                return false;
+            }
+            clear();
+            readFrom(yaml);
+        } else {
+            File legacyDir = findLegacyDir("join.rs", "quit.rs");
+            if (legacyDir == null) {
+                clear();
+                loadFailed = false;
+                PrettyLogger.info("No join/quit message store found, starting fresh");
+                return true;
+            }
+            if (!migrateLegacyFormat(legacyDir)) {
+                return false;
+            }
+        }
+        loadFailed = false;
 
         PrettyLogger.info("Loaded " + byUuid.size() + " player join/quit message(s)"
                 + (pending.isEmpty() ? "" : ", " + pending.size() + " pending name match(es)")
                 + (defaultJoinMessage != null || defaultQuitMessage != null ? ", default message(s)" : "")
                 + (firstJoinMessage != null ? ", first-join message" : ""));
+        return true;
+    }
+
+    private void clear() {
+        byUuid.clear();
+        pending.clear();
+        defaultJoinMessage = null;
+        defaultQuitMessage = null;
+        firstJoinMessage = null;
     }
 
     private void readFrom(YamlConfiguration yaml) {
@@ -138,6 +186,19 @@ public class JoinMsgStore {
     }
 
     public boolean save() {
+        if (loadFailed) {
+            PrettyLogger.warn("Refusing to save join/quit message store: the files on disk failed to load");
+            return false;
+        }
+        try {
+            return write();
+        } catch (RuntimeException e) {
+            PrettyLogger.warn("Failed to save join/quit message store: " + e);
+            return false;
+        }
+    }
+
+    private boolean write() {
         YamlConfiguration yaml = new YamlConfiguration();
 
         if (defaultJoinMessage != null) yaml.set("default.join", defaultJoinMessage);
@@ -192,14 +253,13 @@ public class JoinMsgStore {
     // One-time legacy .rs migration
     // ---------------------------------------------------------------
 
-    private boolean migrateLegacyFormat() {
-        File dir = getMessagesDir();
+    /**
+     * @return false if a legacy file could not be read; nothing is saved or renamed then, so
+     *         the migration is retried on the next load
+     */
+    private boolean migrateLegacyFormat(File dir) {
         File joinFile = new File(dir, "join.rs");
         File quitFile = new File(dir, "quit.rs");
-
-        if (!joinFile.exists() && !quitFile.exists()) {
-            return false;
-        }
 
         PrettyLogger.info("Migrating legacy ChatControl join/quit format to the new store...");
 
@@ -211,9 +271,16 @@ public class JoinMsgStore {
         String[] legacyDefaultQuit = new String[1];
         String[] legacyFirstJoin = new String[1];
 
-        if (joinFile.exists()) parseLegacyFile(joinFile, legacyJoin, "join", legacyDefaultJoin, legacyFirstJoin);
-        if (quitFile.exists()) parseLegacyFile(quitFile, legacyQuit, "quit", legacyDefaultQuit, null);
+        boolean parsed = true;
+        if (joinFile.exists()) parsed = parseLegacyFile(joinFile, legacyJoin, "join", legacyDefaultJoin, legacyFirstJoin);
+        if (quitFile.exists()) parsed &= parseLegacyFile(quitFile, legacyQuit, "quit", legacyDefaultQuit, null);
+        if (!parsed) {
+            loadFailed = true;
+            PrettyLogger.warn("Aborting legacy join/quit migration; the store stays read-only until it succeeds");
+            return false;
+        }
 
+        clear();
         defaultJoinMessage = legacyDefaultJoin[0];
         defaultQuitMessage = legacyDefaultQuit[0];
         firstJoinMessage = legacyFirstJoin[0];
@@ -226,7 +293,10 @@ public class JoinMsgStore {
             pending.put(name.toLowerCase(), new MessageEntry(null, name, legacyJoin.get(name), legacyQuit.get(name)));
         }
 
-        save();
+        if (!write()) {
+            // Leave the .rs files in place so the migration is retried on the next load.
+            return true;
+        }
 
         backupLegacyFile(joinFile);
         backupLegacyFile(quitFile);
@@ -237,22 +307,24 @@ public class JoinMsgStore {
         return true;
     }
 
+    public static final int REPAIR_SAVE_FAILED = -2;
+
     /**
      * Re-imports entries from the pre-migration ".rs.migrated" backup files
-     * (kept untouched by {@link #migrateLegacyFormat()}) that are missing or
+     * (kept untouched by {@link #migrateLegacyFormat(File)}) that are missing or
      * incomplete in the current store. Never overwrites an existing non-null
      * join/quit message — only fills in gaps. Safe to run repeatedly.
      *
-     * @return number of entries added or filled in, or -1 if no backup files exist
+     * @return number of entries added or filled in, -1 if no backup files exist, or
+     *         {@link #REPAIR_SAVE_FAILED} if the result could not be saved (and was rolled back)
      */
     public int repairFromLegacyBackups() {
-        File dir = getMessagesDir();
-        File joinFile = new File(dir, "join.rs.migrated");
-        File quitFile = new File(dir, "quit.rs.migrated");
-
-        if (!joinFile.exists() && !quitFile.exists()) {
+        File dir = findLegacyDir("join.rs.migrated", "quit.rs.migrated");
+        if (dir == null) {
             return -1;
         }
+        File joinFile = new File(dir, "join.rs.migrated");
+        File quitFile = new File(dir, "quit.rs.migrated");
 
         // Case-insensitive so a stray case difference between join.rs/quit.rs "require"
         // lines for the same player can't silently drop one half of their messages.
@@ -268,6 +340,7 @@ public class JoinMsgStore {
         names.addAll(legacyJoin.keySet());
         names.addAll(legacyQuit.keySet());
 
+        Snapshot before = snapshot();
         int recovered = 0;
         for (String name : names) {
             String join = legacyJoin.get(name);
@@ -286,7 +359,7 @@ public class JoinMsgStore {
             if (filled) recovered++;
         }
 
-        if (recovered > 0) save();
+        if (recovered > 0 && !saveOrRestore(before)) return REPAIR_SAVE_FAILED;
         return recovered;
     }
 
@@ -322,8 +395,10 @@ public class JoinMsgStore {
      * The first message seen for a given resolved player name wins; later duplicate/
      * shorthand groups for the same player are ignored (matches the original engine's
      * Stop_On_First_Match top-to-bottom rule evaluation).
+     *
+     * @return false if the file could not be read
      */
-    private void parseLegacyFile(File file, Map<String, String> out, String type, String[] defaultOut, String[] firstJoinOut) {
+    private boolean parseLegacyFile(File file, Map<String, String> out, String type, String[] defaultOut, String[] firstJoinOut) {
         List<String> suffixes = type.equals("quit")
                 ? List.of("-quit-message", "-leave-message")
                 : List.of("-" + type + "-message");
@@ -375,8 +450,10 @@ public class JoinMsgStore {
                     inMessageBlock = false;
                 }
             }
+            return true;
         } catch (IOException e) {
             PrettyLogger.warn("Failed to parse legacy " + type + " messages from " + file.getName() + ": " + e.getMessage());
+            return false;
         }
     }
 
@@ -432,6 +509,8 @@ public class JoinMsgStore {
             if (entry == null) {
                 entry = new MessageEntry(uuid, player.getName(), legacyMatch.join, legacyMatch.quit);
                 byUuid.put(uuid, entry);
+            } else {
+                mergeMissing(entry, legacyMatch);
             }
             save();
         } else if (entry != null && !player.getName().equals(entry.name)) {
@@ -457,23 +536,27 @@ public class JoinMsgStore {
         String name = target.getName() != null ? target.getName() : target.getUniqueId().toString();
         UUID uuid = target.getUniqueId();
 
-        pending.remove(sanitizeKey(name));
+        Snapshot before = snapshot();
+        MessageEntry pendingEntry = pending.remove(sanitizeKey(name));
 
         MessageEntry entry = byUuid.computeIfAbsent(uuid, id -> new MessageEntry(id, name, null, null));
         entry.name = name;
+        // Keep a half that only the pending entry has, e.g. a pending quit when only join is set.
+        mergeMissing(entry, pendingEntry);
         if (joinMessage != null) entry.join = sanitize(joinMessage).replace("%player%", "{player}");
         if (quitMessage != null) entry.quit = sanitize(quitMessage).replace("%player%", "{player}");
 
-        return save() ? SetResult.OK : SetResult.WRITE_ERROR;
+        return saveOrRestore(before) ? SetResult.OK : SetResult.WRITE_ERROR;
     }
 
-    public boolean removePlayerMessages(OfflinePlayer target, boolean removeJoin, boolean removeQuit) {
+    public RemoveResult tryRemovePlayerMessages(OfflinePlayer target, boolean removeJoin, boolean removeQuit) {
+        Snapshot before = snapshot();
         boolean changed = false;
 
         MessageEntry entry = byUuid.get(target.getUniqueId());
         if (entry != null) {
-            if (removeJoin) { entry.join = null; changed = true; }
-            if (removeQuit) { entry.quit = null; changed = true; }
+            if (removeJoin && entry.join != null) { entry.join = null; changed = true; }
+            if (removeQuit && entry.quit != null) { entry.quit = null; changed = true; }
             if (entry.join == null && entry.quit == null) {
                 byUuid.remove(target.getUniqueId());
             }
@@ -482,15 +565,15 @@ public class JoinMsgStore {
         String name = target.getName();
         MessageEntry pend = name != null ? pending.get(sanitizeKey(name)) : null;
         if (pend != null) {
-            if (removeJoin) { pend.join = null; changed = true; }
-            if (removeQuit) { pend.quit = null; changed = true; }
+            if (removeJoin && pend.join != null) { pend.join = null; changed = true; }
+            if (removeQuit && pend.quit != null) { pend.quit = null; changed = true; }
             if (pend.join == null && pend.quit == null) {
                 pending.remove(sanitizeKey(name));
             }
         }
 
-        if (changed) save();
-        return changed;
+        if (!changed) return RemoveResult.NOTHING_REMOVED;
+        return saveOrRestore(before) ? RemoveResult.REMOVED : RemoveResult.WRITE_ERROR;
     }
 
     public MessageEntry getEntry(OfflinePlayer target) {
@@ -525,18 +608,20 @@ public class JoinMsgStore {
             return SetResult.MISSING_PLACEHOLDER_QUIT;
         }
 
+        Snapshot before = snapshot();
         MessageEntry entry = pending.computeIfAbsent(sanitizeKey(name), k -> new MessageEntry(null, name, null, null));
         entry.name = name;
         if (joinMessage != null) entry.join = sanitize(joinMessage).replace("%player%", "{player}");
         if (quitMessage != null) entry.quit = sanitize(quitMessage).replace("%player%", "{player}");
 
-        return save() ? SetResult.OK : SetResult.WRITE_ERROR;
+        return saveOrRestore(before) ? SetResult.OK : SetResult.WRITE_ERROR;
     }
 
-    public boolean removePendingMessages(String name, boolean removeJoin, boolean removeQuit) {
+    public RemoveResult tryRemovePendingMessages(String name, boolean removeJoin, boolean removeQuit) {
         MessageEntry entry = pending.get(sanitizeKey(name));
-        if (entry == null) return false;
+        if (entry == null) return RemoveResult.NOTHING_REMOVED;
 
+        Snapshot before = snapshot();
         boolean changed = false;
         if (removeJoin && entry.join != null) { entry.join = null; changed = true; }
         if (removeQuit && entry.quit != null) { entry.quit = null; changed = true; }
@@ -544,8 +629,8 @@ public class JoinMsgStore {
             pending.remove(sanitizeKey(name));
         }
 
-        if (changed) save();
-        return changed;
+        if (!changed) return RemoveResult.NOTHING_REMOVED;
+        return saveOrRestore(before) ? RemoveResult.REMOVED : RemoveResult.WRITE_ERROR;
     }
 
     public List<MessageEntry> listEntries() {
@@ -563,18 +648,59 @@ public class JoinMsgStore {
     }
 
     public boolean setDefaultJoinMessage(String message) {
+        Snapshot before = snapshot();
         this.defaultJoinMessage = message;
-        return save();
+        return saveOrRestore(before);
     }
 
     public boolean setDefaultQuitMessage(String message) {
+        Snapshot before = snapshot();
         this.defaultQuitMessage = message;
-        return save();
+        return saveOrRestore(before);
     }
 
     public boolean setFirstJoinMessage(String message) {
+        Snapshot before = snapshot();
         this.firstJoinMessage = message;
-        return save();
+        return saveOrRestore(before);
+    }
+
+    private static void mergeMissing(MessageEntry target, MessageEntry source) {
+        if (source == null) return;
+        if (target.join == null) target.join = source.join;
+        if (target.quit == null) target.quit = source.quit;
+    }
+
+    private record Snapshot(Map<UUID, MessageEntry> byUuid, Map<String, MessageEntry> pending,
+                            String defaultJoin, String defaultQuit, String firstJoin) {
+    }
+
+    private Snapshot snapshot() {
+        return new Snapshot(copyEntries(byUuid), copyEntries(pending),
+                defaultJoinMessage, defaultQuitMessage, firstJoinMessage);
+    }
+
+    private static <K> Map<K, MessageEntry> copyEntries(Map<K, MessageEntry> entries) {
+        Map<K, MessageEntry> copy = new HashMap<>();
+        entries.forEach((key, e) -> copy.put(key, new MessageEntry(e.uuid, e.name, e.join, e.quit)));
+        return copy;
+    }
+
+    /** Saves the store; if that fails, puts the in-memory state back so it matches the file again. */
+    private boolean saveOrRestore(Snapshot before) {
+        if (save()) return true;
+        restore(before);
+        return false;
+    }
+
+    private void restore(Snapshot before) {
+        byUuid.clear();
+        byUuid.putAll(before.byUuid());
+        pending.clear();
+        pending.putAll(before.pending());
+        defaultJoinMessage = before.defaultJoin();
+        defaultQuitMessage = before.defaultQuit();
+        firstJoinMessage = before.firstJoin();
     }
 
     /**
@@ -612,6 +738,15 @@ public class JoinMsgStore {
 
     private File getMessagesDir() {
         return new File(plugin.getDataFolder(), "messages");
+    }
+
+    /** Finds the folder holding the legacy .rs files: this plugin's messages folder, then ChatControl's. */
+    private File findLegacyDir(String joinName, String quitName) {
+        File[] candidates = {getMessagesDir(), new File(plugin.getDataFolder().getParentFile(), "ChatControl/messages")};
+        for (File dir : candidates) {
+            if (new File(dir, joinName).exists() || new File(dir, quitName).exists()) return dir;
+        }
+        return null;
     }
 
     private File getStoreFile() {

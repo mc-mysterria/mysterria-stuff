@@ -9,6 +9,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.mysterria.stuff.MysterriaStuff;
 import net.mysterria.stuff.utils.AdventureUtil;
+import net.mysterria.stuff.utils.ItemDelivery;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -16,9 +17,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 public class JoinMsgSessionHandler implements Listener {
@@ -32,7 +33,8 @@ public class JoinMsgSessionHandler implements Listener {
         this.plugin = plugin;
         this.manager = JoinMsgTokenManager.getInstance();
         this.store = store;
-        this.activeSessions = new HashMap<>();
+        // Read from the async chat thread, mutated on the main thread.
+        this.activeSessions = new ConcurrentHashMap<>();
     }
 
 
@@ -65,20 +67,21 @@ public class JoinMsgSessionHandler implements Listener {
         UUID playerId = player.getUniqueId();
 
 
-        if (!activeSessions.containsKey(playerId)) {
+        PlayerSession session = activeSessions.get(playerId);
+        if (session == null) {
             return;
         }
 
 
         event.setCancelled(true);
 
-        PlayerSession session = activeSessions.get(playerId);
-
 
         String message = PlainTextComponentSerializer.plainText().serialize(event.message());
 
 
         plugin.getServer().getScheduler().runTask(plugin, () -> {
+            // The session may have been cancelled or replaced in the meantime.
+            if (activeSessions.get(playerId) != session) return;
             processSessionMessage(player, session, message);
         });
     }
@@ -213,20 +216,16 @@ public class JoinMsgSessionHandler implements Listener {
     public void handleConfirmation(Player player) {
         UUID playerId = player.getUniqueId();
 
-        if (!activeSessions.containsKey(playerId)) {
+        PlayerSession session = activeSessions.get(playerId);
+        if (session == null) {
             player.sendMessage(manager.getMessage("no-active-session"));
             return;
         }
-
-        PlayerSession session = activeSessions.get(playerId);
 
         if (session.getState() != SessionState.AWAITING_CONFIRMATION) {
             player.sendMessage(manager.getMessage("not-ready-to-confirm"));
             return;
         }
-
-
-        activeSessions.remove(playerId);
 
 
         player.sendMessage(manager.getMessage("processing"));
@@ -238,10 +237,19 @@ public class JoinMsgSessionHandler implements Listener {
         );
 
         switch (result) {
-            case OK -> player.sendMessage(manager.getMessage("success"));
+            case OK -> {
+                activeSessions.remove(playerId);
+                player.sendMessage(manager.getMessage("success"));
+            }
             case MISSING_PLACEHOLDER_JOIN -> player.sendMessage(manager.getMessage("join-missing-placeholder"));
             case MISSING_PLACEHOLDER_QUIT -> player.sendMessage(manager.getMessage("quit-missing-placeholder"));
             case WRITE_ERROR -> player.sendMessage(manager.getMessage("write-error"));
+        }
+        if (result != JoinMsgStore.SetResult.OK) {
+            // The token is already spent: keep the session so the player can retry or cancel for a refund.
+            player.sendMessage(Component.empty());
+            sendCancelButton(player);
+            sendRestartButton(player);
         }
     }
 
@@ -250,34 +258,36 @@ public class JoinMsgSessionHandler implements Listener {
         UUID playerId = player.getUniqueId();
 
 
-        if (!activeSessions.containsKey(playerId)) {
+        // Removing the session is what claims the refund, so it can only be paid once.
+        if (activeSessions.remove(playerId) == null) {
             player.sendMessage(manager.getMessage("no-active-session"));
             return;
         }
 
 
-        activeSessions.remove(playerId);
-
-
         ItemStack token = manager.createToken(1);
-        player.getInventory().addItem(token);
+        ItemDelivery.Result delivery = ItemDelivery.deliver(player, token);
 
 
         player.sendMessage(manager.getMessage("session-cancelled"));
-        player.sendMessage(manager.getMessage("token-refunded"));
+        if (delivery.complete()) {
+            player.sendMessage(manager.getMessage("token-refunded"));
+        } else {
+            player.sendMessage(Component.text("Your token refund could not be delivered. Please contact staff.",
+                    NamedTextColor.RED));
+        }
     }
 
 
     public void handleRestart(Player player) {
         UUID playerId = player.getUniqueId();
 
-        if (!activeSessions.containsKey(playerId)) {
+        if (activeSessions.remove(playerId) == null) {
             player.sendMessage(manager.getMessage("no-active-session"));
             return;
         }
 
 
-        activeSessions.remove(playerId);
         player.sendMessage(manager.getMessage("session-restarted"));
 
 

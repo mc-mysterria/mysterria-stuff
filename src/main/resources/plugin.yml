@@ -9,6 +9,9 @@ loadbefore:
   - MythicDungeons
 
 commands:
+  o:
+    description: Opens the organization menu
+    usage: /o
   mysterriastuff:
     aliases: [ mystuff ]
     description: Main command for MysterriaStuff plugin
