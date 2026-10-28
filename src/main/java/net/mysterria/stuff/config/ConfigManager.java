@@ -1,292 +1,128 @@
 package net.mysterria.stuff.config;
 
-import net.mysterria.stuff.MysterriaStuff;
-import net.mysterria.stuff.features.zones.CoiZone;
-import net.mysterria.stuff.utils.PrettyLogger;
+import lombok.Getter;
+import net.mysterria.stuff.config.models.BoosterSettings;
+import net.mysterria.stuff.config.models.Features;
+import net.mysterria.stuff.config.models.TokenSettings;
+import net.mysterria.stuff.config.models.WrapMenuTitles;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-
+@Getter
 public class ConfigManager {
 
-    private final MysterriaStuff plugin;
+    private final JavaPlugin plugin;
     private FileConfiguration config;
+    private boolean debugMode;
+    private boolean lastSprintActive;
+    private Features features;
+    private Map<String, List<String>> chatAliases;
+    private BoosterSettings boosterSettings;
+    private TokenSettings universalToken;
+    private WrapMenuTitles wrapMenuTitles;
+    private TokenSettings joinMessageToken;
 
-    public ConfigManager(MysterriaStuff plugin) {
+    public ConfigManager(JavaPlugin plugin) {
         this.plugin = plugin;
-        loadConfig();
+        load();
     }
 
-
-    public void loadConfig() {
-
+    public void load() {
         plugin.saveDefaultConfig();
-
-
         plugin.reloadConfig();
         config = plugin.getConfig();
-
-        PrettyLogger.debug("Configuration loaded");
-    }
-
-
-    public void reloadConfig() {
-        loadConfig();
-        PrettyLogger.info("Configuration reloaded");
-    }
-
-
-    public void saveConfig() {
+        config.options().copyDefaults(true);
         plugin.saveConfig();
-        PrettyLogger.debug("Configuration saved");
-    }
 
-
-    public boolean isDebugMode() {
-        return config.getBoolean("debug-mode", false);
+        debugMode = requireBoolean("debug-mode");
+        lastSprintActive = requireBoolean("last-sprint.active");
+        features = new Features(
+                requireBoolean("features.booster-patriarch"),
+                requireBoolean("features.ritual-fallbacks"),
+                requireBoolean("features.universal-token"),
+                requireBoolean("features.joinmsg-token"),
+                requireBoolean("features.last-sprint"),
+                requireBoolean("features.chat-aliases"));
+        chatAliases = readAliases();
+        boosterSettings = new BoosterSettings(
+                requireString("coi-booster-patriarch.api-url"),
+                requireInt("coi-booster-patriarch.update-interval-seconds"));
+        universalToken = readToken("universal-token");
+        wrapMenuTitles = new WrapMenuTitles(
+                requireString("universal-token.gui-main-title"),
+                requireString("universal-token.gui-category-title"),
+                requireString("universal-token.gui-confirm-title"));
+        joinMessageToken = readToken("joinmsg-token");
     }
 
     public void setDebugMode(boolean enabled) {
+        debugMode = enabled;
         config.set("debug-mode", enabled);
-        saveConfig();
-    }
-
-    public String getPrefixColor() {
-        return config.getString("prefix-color", "#AA55FF");
-    }
-
-
-    public boolean isElytraBlockerEnabled() {
-        return config.getBoolean("features.elytra-blocker", true);
-    }
-
-    public boolean isLightningFixEnabled() {
-        return config.getBoolean("features.lightning-fix", true);
-    }
-
-    public boolean isCoiProtectionEnabled() {
-        return config.getBoolean("features.coi-protection", true);
-    }
-
-    public boolean isBoosterPatriarchEnabled() {
-        return config.getBoolean("features.booster-patriarch", true);
-    }
-
-    public boolean isRitualFallbacksEnabled() {
-        return config.getBoolean("features.ritual-fallbacks", true);
-    }
-
-    public boolean isRecipeManagerEnabled() {
-        return config.getBoolean("features.recipe-manager", true);
-    }
-
-    public boolean isUniversalTokenEnabled() {
-        return config.getBoolean("features.universal-token", true);
-    }
-
-    public boolean isJoinMsgTokenEnabled() {
-        if (config.contains("features.joinmsg-token")) {
-            return config.getBoolean("features.joinmsg-token", true);
-        }
-        // Falls back to the pre-rename key so an already-deployed config.yml keeps working untouched.
-        return config.getBoolean("features.chatcontrol-token", true);
-    }
-
-    public boolean isLastSprintEnabled() {
-        return config.getBoolean("features.last-sprint", true);
-    }
-
-    public boolean isDungeonWorldEnforcerEnabled() {
-        return config.getBoolean("features.dungeon-world-enforcer", true);
-    }
-
-    public boolean isChatAliasesEnabled() {
-        return config.getBoolean("features.chat-aliases", true);
-    }
-
-    public String getDungeonWorldName() {
-        return config.getString("dungeon-world-enforcer.world-name", "dungeons_normal_0");
-    }
-
-    public boolean isLastSprintActive() {
-        return config.getBoolean("last-sprint.active", false);
+        plugin.saveConfig();
     }
 
     public void setLastSprintActive(boolean active) {
+        lastSprintActive = active;
         config.set("last-sprint.active", active);
-        saveConfig();
+        plugin.saveConfig();
     }
 
-
-
-    public boolean isResetAttributesOnJoin() {
-        return config.getBoolean("coi-protection.reset-attributes-on-join", true);
-    }
-
-    public boolean isRestrictSpectatorNoclip() {
-        return config.getBoolean("coi-protection.restrict-spectator-noclip", true);
-    }
-
-    public boolean isBlockNightmarePickups() {
-        return config.getBoolean("coi-protection.block-nightmare-pickups", true);
-    }
-
-    public boolean isNightmareKeepInventory() {
-        return config.getBoolean("coi-protection.nightmare-keep-inventory", true);
-    }
-
-    public boolean isCoiZonesEnabled() {
-        return config.getBoolean("coi-zones.enabled", false);
-    }
-
-    public List<CoiZone> getCoiZones() {
-        List<CoiZone> result = new ArrayList<>();
-        if (!isCoiZonesEnabled()) return result;
-        List<Map<?, ?>> zoneList = config.getMapList("coi-zones.zones");
-        for (Map<?, ?> raw : zoneList) {
-            try {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> map = (Map<String, Object>) raw;
-                String name = (String) map.get("name");
-                String world = map.containsKey("world") ? (String) map.get("world") : "world";
-                int minY = toInt(map.get("min-y"));
-                int maxY = toInt(map.get("max-y"));
-
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> vertexList = (List<Map<String, Object>>) map.get("vertices");
-                if (vertexList == null || vertexList.size() < 3) {
-                    PrettyLogger.warn("CoI zone '" + name + "' needs at least 3 vertices — skipping");
-                    continue;
-                }
-                List<double[]> vertices = new ArrayList<>();
-                for (Map<String, Object> v : vertexList) {
-                    vertices.add(new double[]{toDouble(v.get("x")), toDouble(v.get("z"))});
-                }
-
-                boolean alwaysNight = map.containsKey("always-night") && toBoolean(map.get("always-night"));
-                boolean lightning = map.containsKey("lightning-effects") && toBoolean(map.get("lightning-effects"));
-                int lightningInterval = map.containsKey("lightning-interval-ticks") ? toInt(map.get("lightning-interval-ticks")) : 100;
-                int lightningRadius = map.containsKey("lightning-radius") ? toInt(map.get("lightning-radius")) : 30;
-                result.add(new CoiZone(name, world, minY, maxY, vertices,
-                        alwaysNight, lightning, lightningInterval, lightningRadius));
-            } catch (Exception e) {
-                PrettyLogger.warn("Failed to load CoI zone: " + e.getMessage());
-            }
+    private Map<String, List<String>> readAliases() {
+        ConfigurationSection section = requireSection("chat-aliases.aliases");
+        Map<String, List<String>> aliases = new LinkedHashMap<>();
+        for (String route : section.getKeys(false)) {
+            aliases.put(route, section.getStringList(route));
         }
-        return result;
+        return aliases;
     }
 
-    private int toInt(Object value) {
-        if (value instanceof Number num) return num.intValue();
-        return Integer.parseInt(String.valueOf(value));
-    }
-
-    private double toDouble(Object value) {
-        if (value instanceof Number num) return num.doubleValue();
-        return Double.parseDouble(String.valueOf(value));
-    }
-
-    private boolean toBoolean(Object value) {
-        if (value instanceof Boolean b) return b;
-        return Boolean.parseBoolean(String.valueOf(value));
-    }
-
-
-    public boolean isRecipesEnabled() {
-        return config.getBoolean("recipes.enabled", true);
-    }
-
-    public int getMaxRecipes() {
-        return config.getInt("recipes.max-recipes", 100);
-    }
-
-    public boolean isLogRecipeChanges() {
-        return config.getBoolean("recipes.log-changes", true);
-    }
-
-
-    public String getTokenItemName() {
-        return config.getString("universal-token.item-name", "&6&lUniversal Wrap Token");
-    }
-
-    public java.util.List<String> getTokenItemLore() {
-        return config.getStringList("universal-token.item-lore");
-    }
-
-    public String getGuiMainTitle() {
-        return config.getString("universal-token.gui-main-title", "&6Universal Token - Categories");
-    }
-
-    public String getGuiCategoryTitle() {
-        return config.getString("universal-token.gui-category-title", "&6{category} Wraps");
-    }
-
-    public String getGuiConfirmTitle() {
-        return config.getString("universal-token.gui-confirm-title", "&cConfirm Exchange?");
-    }
-
-    public String getTokenMessage(String key) {
-        return config.getString("universal-token.messages." + key, "");
-    }
-
-
-    public String getJoinMsgTokenName() {
-        String path = config.contains("joinmsg-token.item-name") ? "joinmsg-token" : "chatcontrol-token";
-        return config.getString(path + ".item-name", "&b&lCustom Message Token");
-    }
-
-    public java.util.List<String> getJoinMsgTokenLore() {
-        String path = config.contains("joinmsg-token.item-lore") ? "joinmsg-token" : "chatcontrol-token";
-        return config.getStringList(path + ".item-lore");
-    }
-
-    public String getJoinMsgMessage(String key) {
-        if (config.contains("joinmsg-token.messages." + key)) {
-            return config.getString("joinmsg-token.messages." + key, "");
+    private TokenSettings readToken(String path) {
+        ConfigurationSection messages = requireSection(path + ".messages");
+        Map<String, String> texts = new LinkedHashMap<>();
+        for (String key : messages.getKeys(false)) {
+            texts.put(key, messages.getString(key));
         }
-        return config.getString("chatcontrol-token.messages." + key, "");
+        if (!config.isList(path + ".item-lore")) {
+            throw invalid(path + ".item-lore");
+        }
+        return new TokenSettings(requireString(path + ".item-name"), config.getStringList(path + ".item-lore"), texts);
     }
 
-
-    public boolean isUseColors() {
-        return config.getBoolean("logging.use-colors", true);
+    private boolean requireBoolean(String path) {
+        if (!config.isBoolean(path)) {
+            throw invalid(path);
+        }
+        return config.getBoolean(path);
     }
 
-    public boolean isShowHeader() {
-        return config.getBoolean("logging.show-header", true);
+    private int requireInt(String path) {
+        if (!config.isInt(path)) {
+            throw invalid(path);
+        }
+        return config.getInt(path);
     }
 
-    public String getMinLogLevel() {
-        return config.getString("logging.min-level", "INFO");
+    private String requireString(String path) {
+        if (!config.isString(path)) {
+            throw invalid(path);
+        }
+        return config.getString(path);
     }
 
-    public boolean isLogCommands() {
-        return config.getBoolean("logging.log-commands", true);
+    private ConfigurationSection requireSection(String path) {
+        ConfigurationSection section = config.getConfigurationSection(path);
+        if (section == null) {
+            throw invalid(path);
+        }
+        return section;
     }
 
-    public boolean isLogFeatures() {
-        return config.getBoolean("logging.log-features", true);
-    }
-
-
-    public boolean isAsyncProcessing() {
-        return config.getBoolean("performance.async-processing", true);
-    }
-
-    public boolean isEnableCaching() {
-        return config.getBoolean("performance.enable-caching", true);
-    }
-
-
-    public int getConfigVersion() {
-        return config.getInt("config-version", 1);
-    }
-
-
-    public FileConfiguration getConfig() {
-        return config;
+    private IllegalStateException invalid(String path) {
+        return new IllegalStateException("config.yml: missing or invalid '" + path + "'");
     }
 }

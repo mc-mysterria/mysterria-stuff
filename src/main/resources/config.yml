@@ -1,89 +1,14 @@
-# MysterriaStuff Configuration File
-#
-# This plugin provides various utilities and fixes for the Mysterria server
-#
-# For help, use /mystuff help in-game
-
-# ═══════════════════════════════════════════════════════════════
-# General Settings
-# ═══════════════════════════════════════════════════════════════
-
-# Enable debug mode to see detailed messages in console
 debug-mode: false
 
-# Plugin prefix color (hex color code)
-# Default: #AA55FF (purple)
-prefix-color: "#AA55FF"
-
-# ═══════════════════════════════════════════════════════════════
-# Feature Toggles
-# ═══════════════════════════════════════════════════════════════
-
 features:
-  # Reinforced Elytra protection system
-  elytra-blocker: true
-
-  # Lightning strike fix for HuskTowns compatibility
-  lightning-fix: true
-
-  # CircleOfImagination dangerous actions listener
-  # Prevents duplication and unauthorized use of mystical items
-  coi-protection: true
-
-  # Runtime recipe manager
-  # Allows creating custom recipes without server restart
-  recipe-manager: true
-
-  # Universal Token for HMCWraps integration
-  # Allows players to exchange tokens for any available wrap
-  universal-token: true
-
-  # Booster Patriarch System
-  # Automatically grants/removes patriarch role based on booster status
   booster-patriarch: true
-
-  # CoI Ritual Fallbacks
-  # Handles custom ritual completion logic that is server-specific rather than pathway-specific
   ritual-fallbacks: true
-
-  # Join/Quit Message Token
-  # Allows players to set their own custom join/quit messages
+  universal-token: true
   joinmsg-token: true
-
-  # Last Sprint Welcome Kit
-  # Gives first-time players a configurable reward kit before The Great Reset
-  # Configure the kit contents via /mystuff lastsprint setup
   last-sprint: true
-
-  # Dungeon World Enforcer
-  # Pre-creates a void (completely empty) world before a third-party dungeon plugin can,
-  # so the plugin's structures are placed in a void rather than over generated terrain.
-  # MysterriaStuff must load before the dungeon plugin — add it to 'loadbefore' in plugin.yml.
-  dungeon-world-enforcer: false
-
-  # Chat Shortcuts
-  # Registers a ZelChat module that turns '!<alias> <message>' into the owning plugin's
-  # chat command, so players use one interface for every provider-owned channel.
   chat-aliases: true
 
-# ═══════════════════════════════════════════════════════════════
-# Chat Shortcut Settings
-# ═══════════════════════════════════════════════════════════════
-
-# Each key below is a fixed route with a hard-coded destination command; only the alias
-# list is configurable. Values are never command strings, so this configuration cannot
-# turn a chat message into arbitrary command execution.
-#
-# Rename a route by editing its list, or disable it with an empty list ([]).
-# Aliases must be lowercase letters and digits only; anything else is logged and ignored.
-# An alias claimed by two routes stays with the first route listed here.
-#
-# Global chat keeps MysterriaTranslator's existing '!<message>' shortcut — this module only
-# claims '!' messages whose first word matches an alias below, and leaves every other
-# message untouched. Local/ranged channels intentionally have no alias.
-#
-# Membership, permission, ignore and formatting rules stay with the destination plugin;
-# staff aliases go through ZelChat's /staffchat and keep its own permission checks.
+# lowercase letters and digits only; an empty list disables the route
 chat-aliases:
   aliases:
     church: [c, cc, church]
@@ -96,219 +21,59 @@ chat-aliases:
     message: [m, msg, dm, pm, w, whisper, tell]
     reply: [r, reply]
 
-# ═══════════════════════════════════════════════════════════════
-# Dungeon World Enforcer Settings
-# ═══════════════════════════════════════════════════════════════
-
-dungeon-world-enforcer:
-  # The world name that the dungeon plugin creates
-  world-name: "dungeons_normal_0"
-
-# ═══════════════════════════════════════════════════════════════
-# Last Sprint Settings
-# ═══════════════════════════════════════════════════════════════
-
 last-sprint:
-  # Controls whether new players automatically receive the kit on join.
-  # Set up rewards via /mystuff lastsprint setup first, then enable with /mystuff lastsprint enable.
   active: false
 
-# ═══════════════════════════════════════════════════════════════
-# CircleOfImagination Protection Settings
-# ═══════════════════════════════════════════════════════════════
-
-coi-protection:
-  # Reset player attributes on join
-  reset-attributes-on-join: true
-
-  # Restrict spectator movement through blocks (except ops)
-  restrict-spectator-noclip: true
-
-  # Prevent item pickup in nightmare worlds
-  block-nightmare-pickups: true
-
-  # Keep inventory on death in nightmare worlds
-  nightmare-keep-inventory: true
-
-# ═══════════════════════════════════════════════════════════════
-# CoI Name Zones
-# ═══════════════════════════════════════════════════════════════
-
-# When enabled, CoI names only respond to players inside a defined zone.
-# Players in a zone get per-player night time and periodic atmospheric lightning.
-# If enabled is false or zones list is empty, names work anywhere in the main world.
-
-coi-zones:
-  enabled: false
-  zones: []
-  # zones:
-  #   - name: "ancient-sanctum"
-  #     world: "world"
-  #     min-y: 60
-  #     max-y: 120
-  #     # At least 3 XZ vertices define the polygon shape of the zone.
-  #     # Any convex or concave polygon is supported.
-  #     vertices:
-  #       - { x: -100, z: -100 }
-  #       - { x:  100, z: -150 }
-  #       - { x:  150, z:   50 }
-  #       - { x:    0, z:  120 }
-  #       - { x: -120, z:   30 }
-  #     # Force perpetual night for the player while inside (per-player, not server-wide)
-  #     always-night: true
-  #     # Strike lightning effects near the player periodically
-  #     lightning-effects: true
-  #     # How often to strike (in ticks, 20 ticks = 1 second)
-  #     lightning-interval-ticks: 100
-  #     # Maximum distance from the player a lightning bolt can spawn
-  #     lightning-radius: 30
-
-# ═══════════════════════════════════════════════════════════════
-# Booster Patriarch Settings
-# ═══════════════════════════════════════════════════════════════
-
 coi-booster-patriarch:
-  # API endpoint to fetch the list of current boosters
   api-url: "https://api.mysterria.net/api/user/boosters"
-
-  # How often to check for booster list updates (in seconds)
-  # Default: 300 seconds (5 minutes)
   update-interval-seconds: 300
 
-# ═══════════════════════════════════════════════════════════════
-# Recipe Manager Settings
-# ═══════════════════════════════════════════════════════════════
-
-recipes:
-  # Enable runtime recipe system
-  enabled: true
-
-  # Maximum number of custom recipes allowed
-  max-recipes: 100
-
-  # Log recipe additions/removals
-  log-changes: true
-
-# ═══════════════════════════════════════════════════════════════
-# Universal Token Settings
-# ═══════════════════════════════════════════════════════════════
-
 universal-token:
-  # Token item appearance
   item-name: "&6&lUniversal Wrap Token"
-
-  # Token lore (supports color codes and placeholders)
   item-lore:
-    - "&7Right-click to browse all available wraps"
-    - "&7and exchange this token for one!"
+    - "&7Right-click to browse every wrap"
+    - "&7and trade this token for one."
     - ""
-    - "&eLeft-click &7a wrap to preview"
+    - "&eLeft-click &7a wrap to preview it"
     - "&aRight-click &7a wrap to exchange"
-    - ""
-    - "&d&lUNIVERSAL TOKEN"
-
-  # GUI titles
   gui-main-title: "&6Universal Token - Categories"
   gui-category-title: "&6{category} Wraps"
-  gui-confirm-title: "&cConfirm Exchange?"
-
-  # Messages
+  gui-confirm-title: "&8Exchange token?"
   messages:
-    token-received: "&aYou received {amount} Universal Wrap Token(s)!"
-    no-wraps-available: "&cNo wraps are currently available!"
-    wrap-exchanged: "&aSuccessfully exchanged token for &e{wrap}&a!"
-    no-token-in-hand: "&cYou must hold a Universal Token to use this command!"
-    preview-started: "&7Previewing &e{wrap}&7... Right-click again to cancel."
-    exchange-cancelled: "&7Exchange cancelled."
-    hmcwraps-not-loaded: "&cHMCWraps plugin is not loaded!"
-    no-permission: "&cYou don't have permission to use this!"
-
-# ═══════════════════════════════════════════════════════════════
-# Join/Quit Message Token Settings
-# ═══════════════════════════════════════════════════════════════
+    token-received: "&aYou received {amount} Universal Wrap Token(s)."
+    no-wraps-available: "&cNo wraps are available right now."
+    wrap-exchanged: "&aExchanged your token for &e{wrap}&a."
+    no-token: "&cYou need a Universal Wrap Token in your inventory."
+    preview-started: "&7Previewing &e{wrap}&7. The menu reopens when the preview ends."
+    exchange-cancelled: "&7Exchange cancelled. Your token was not used."
+    no-permission: "&cYou can't use this token."
 
 joinmsg-token:
-  # Token item appearance
   item-name: "&b&lCustom Message Token"
-
-  # Token lore (supports color codes)
   item-lore:
-    - "&7Right-click to set your custom"
-    - "&7join and quit messages!"
+    - "&7Right-click to set your own"
+    - "&7join and quit messages."
     - ""
-    - "&eUse &6%player% &ein your messages"
-    - "&7to show your name"
-    - ""
-    - "&d&lCUSTOM MESSAGE TOKEN"
-
-  # Messages
+    - "&7Write &6%player% &7where your name goes."
   messages:
-    token-received: "&aYou received {amount} Custom Message Token(s)!"
-    no-permission: "&cYou don't have permission to use this!"
-    already-in-session: "&cYou already have an active message configuration session!"
-    token-error: "&cFailed to use the token. Please try again."
-
-    session-start: "&a&l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n&b&lCustom Message Configuration\n&a&l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n&7Let's set up your custom join and quit messages!"
-    join-prompt: "&e&lStep 1: &7Type your custom &ajoin message &7in chat.\n&7Use &6%player% &7as a placeholder for your name.\n&7Example: &a%player% &7has joined the server!"
-    format-info: "&7Supports color codes: &c&lRed &6&lGold &e&lYellow &a&lGreen &b&lAqua &9&lBlue &d&lPurple"
-    join-received: "&a✓ Join message received!"
-
-    quit-prompt: "&e&lStep 2: &7Type your custom &cquit message &7in chat.\n&7Use &6%player% &7as a placeholder for your name.\n&7Example: &c%player% &7has left the server!"
-    quit-received: "&a✓ Quit message received!"
-
-    preview-header: "&a&l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n&e&lMessage Preview\n&a&l━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    confirm-prompt: "&7Click a button below, or type &f/mystuff joinmsg confirm &7to confirm, or &f/mystuff joinmsg cancel &7to cancel:"
-    use-buttons: "&cPlease use the [✓ CONFIRM] or [✗ CANCEL] buttons, or type &f/mystuff joinmsg confirm &cor &f/mystuff joinmsg cancel&c!"
-
-    processing: "&e⏳ Processing your messages..."
-    success: "&a&l✓ SUCCESS!\n&aYour custom join/quit messages have been set!"
-
-    join-missing-placeholder: "&c✗ Your join message must contain &6%player%&c!\n&7Please try again."
-    quit-missing-placeholder: "&c✗ Your quit message must contain &6%player%&c!\n&7Please try again."
-
-    session-cancelled: "&c✗ Session cancelled. No changes were made."
-    token-refunded: "&aYour token has been returned to your inventory."
-    session-restarted: "&e↻ Restarting from the beginning..."
-    no-active-session: "&cYou don't have an active configuration session!"
-    not-ready-to-confirm: "&cYou must complete all steps before confirming!"
-
-    write-error: "&c✗ Failed to write your messages. Please contact an administrator."
-
-# ═══════════════════════════════════════════════════════════════
-# Logging Settings
-# ═══════════════════════════════════════════════════════════════
-
-logging:
-  # Use colored/gradient console output
-  use-colors: true
-
-  # Show startup header
-  show-header: true
-
-  # Log levels: INFO, WARN, ERROR, DEBUG, SUCCESS
-  # Messages below this level won't be shown (unless debug-mode is true)
-  min-level: INFO
-
-  # Log command usage
-  log-commands: true
-
-  # Log feature loading
-  log-features: true
-
-# ═══════════════════════════════════════════════════════════════
-# Performance Settings
-# ═══════════════════════════════════════════════════════════════
-
-performance:
-  # Enable async processing where possible
-  async-processing: true
-
-  # Cache frequently used data
-  enable-caching: true
-
-# ═══════════════════════════════════════════════════════════════
-# DO NOT MODIFY BELOW THIS LINE
-# ═══════════════════════════════════════════════════════════════
-
-# Configuration version - used for automatic migration
-config-version: 1
+    token-received: "&aYou received {amount} Custom Message Token(s)."
+    no-permission: "&cYou can't use this token."
+    already-in-session: "&cYou are already setting up your messages. Finish or cancel that first."
+    session-start: "&b&lCustom join and quit messages\n&7Your token is held until you confirm. Cancel any time to get it back."
+    join-prompt: "&e&lStep 1/2: &7Type your &ajoin message &7in chat.\n&7Write &6%player% &7where your name goes. Example: &a%player% &7has arrived!"
+    format-info: "&7Supports colour codes: &c&lRed &6&lGold &e&lYellow &a&lGreen &b&lAqua &9&lBlue &d&lPurple"
+    join-received: "&a✓ Join message saved."
+    quit-prompt: "&e&lStep 2/2: &7Type your &cquit message &7in chat.\n&7Write &6%player% &7where your name goes. Example: &c%player% &7has left."
+    quit-received: "&a✓ Quit message saved."
+    preview-header: "&e&lPreview"
+    confirm-prompt: "&7Confirm to use your token, or restart to rewrite them."
+    use-buttons: "&cYour messages are ready. Use the buttons above, or &f/mystuff joinmsg confirm&c / &fcancel&c."
+    success: "&a&l✓ &aYour join and quit messages are set."
+    join-missing-placeholder: "&c✗ Your join message needs &6%player%&c. Type it again."
+    quit-missing-placeholder: "&c✗ Your quit message needs &6%player%&c. Type it again."
+    session-cancelled: "&7Cancelled. Nothing was changed."
+    token-refunded: "&aYour token was returned."
+    session-restarted: "&eStarting over."
+    no-active-session: "&cYou are not setting up any messages."
+    not-ready-to-confirm: "&cFinish both messages before confirming."
+    write-error: "&c✗ Your messages could not be saved, so your token was returned. Please tell staff."

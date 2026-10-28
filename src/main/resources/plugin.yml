@@ -1,87 +1,56 @@
 name: MysterriaStuff
-version: '1.0.0'
+version: '${version}'
 main: net.mysterria.stuff.MysterriaStuff
-api-version: '1.21'
+api-version: '26.3'
 authors: [ ikeepcalm ]
-description: Enhanced Minecraft plugin with utilities, fixes, and runtime features
+description: Small Mysterria gameplay features and integrations
 softdepend: [ HMCWraps, CircleOfImagination, ZelChat ]
-loadbefore:
-  - MythicDungeons
 
 commands:
   mysterriastuff:
     aliases: [ mystuff ]
-    description: Main command for MysterriaStuff plugin
-    usage: /<command> <subcommand>
+    description: MysterriaStuff commands
+    usage: /<command> help
     permission: mysterriastuff.use
 
 permissions:
   mysterriastuff.*:
-    description: Grants all MysterriaStuff permissions
     default: op
     children:
       mysterriastuff.use: true
       mysterriastuff.reload: true
       mysterriastuff.debug: true
-      mysterriastuff.give: true
       mysterriastuff.export: true
-      mysterriastuff.recipe: true
-      mysterriastuff.token: true
       mysterriastuff.token.give: true
       mysterriastuff.token.use: true
       mysterriastuff.joinmsg.use: true
       mysterriastuff.joinmsg.give: true
       mysterriastuff.joinmsg.admin: true
+      mysterriastuff.lastsprint: true
+      mysterriastuff.booster: true
       mysterriastuff.patriarch.bypass: true
-
   mysterriastuff.use:
-    description: Allows using basic MysterriaStuff commands
     default: true
-
   mysterriastuff.reload:
-    description: Allows reloading the plugin
     default: op
-
   mysterriastuff.debug:
-    description: Allows toggling debug mode
     default: op
-
-  mysterriastuff.give:
-    description: Allows giving items to players
-    default: op
-
   mysterriastuff.export:
-    description: Allows exporting items as bytes
     default: op
-
-  mysterriastuff.recipe:
-    description: Allows managing custom recipes
-    default: op
-
-  mysterriastuff.token:
-    description: Allows using universal token commands
-    default: op
-
   mysterriastuff.token.give:
-    description: Allows giving universal tokens to players
     default: op
-
   mysterriastuff.token.use:
-    description: Allows using universal tokens
     default: true
-
   mysterriastuff.joinmsg.use:
-    description: Allows using Join/Quit Message tokens to set your own custom join/quit messages
     default: true
-
   mysterriastuff.joinmsg.give:
-    description: Allows giving Join/Quit Message tokens to players
     default: op
-
   mysterriastuff.joinmsg.admin:
-    description: Allows managing any player's join/quit messages directly via /mystuff joinmsg
     default: op
-
+  mysterriastuff.lastsprint:
+    default: op
+  mysterriastuff.booster:
+    default: op
   mysterriastuff.patriarch.bypass:
-    description: Allows bypassing the boon limit check, keeping patriarch even when another boon is present
+    description: Keeps the booster Patriarch boon even alongside other boons
     default: op
