@@ -49,6 +49,7 @@ public final class MysterriaStuff extends JavaPlugin {
     private LastSprintGUI lastSprintGUI;
     private ChatAliasIntegration chatAliasIntegration;
     private boolean chatAliasRegistrationQueued;
+    private AutoCloseable discordShortcutGuard;
 
     public static MysterriaStuff getInstance() {
         return instance;
@@ -248,6 +249,7 @@ public final class MysterriaStuff extends JavaPlugin {
     @Override
     public void onDisable() {
 
+        closeDiscordShortcutGuard();
         closeChatAliasIntegration();
 
         if (coiZoneManager != null) {
@@ -342,7 +344,42 @@ public final class MysterriaStuff extends JavaPlugin {
         getServer().getScheduler().runTask(this, () -> {
             chatAliasRegistrationQueued = false;
             reloadChatAliasIntegration();
+            reloadDiscordShortcutGuard();
         });
+    }
+
+    /**
+     * Keeps shortcut messages (party, staff, private and the rest) out of the DiscordSRV relay while
+     * the shortcuts are active. See {@link net.mysterria.stuff.features.chat.DiscordShortcutGuard}.
+     */
+    private void reloadDiscordShortcutGuard() {
+        Plugin discordSrv = getServer().getPluginManager().getPlugin("DiscordSRV");
+        if (chatAliasIntegration == null || discordSrv == null || !discordSrv.isEnabled()) {
+            closeDiscordShortcutGuard();
+            return;
+        }
+        if (discordShortcutGuard != null) {
+            return;
+        }
+        try {
+            discordShortcutGuard = net.mysterria.stuff.features.chat.DiscordShortcutGuard.register(() -> chatAliasIntegration);
+            PrettyLogger.feature("Chat shortcuts kept out of Discord");
+        } catch (LinkageError | RuntimeException error) {
+            PrettyLogger.error("Failed to keep chat shortcuts out of Discord: " + error.getMessage());
+        }
+    }
+
+    private void closeDiscordShortcutGuard() {
+        if (discordShortcutGuard == null) {
+            return;
+        }
+        try {
+            discordShortcutGuard.close();
+        } catch (Exception | LinkageError error) {
+            PrettyLogger.error("Failed to unregister the Discord shortcut guard: " + error.getMessage());
+        } finally {
+            discordShortcutGuard = null;
+        }
     }
 
     private void closeChatAliasIntegration() {
@@ -374,15 +411,20 @@ public final class MysterriaStuff extends JavaPlugin {
 
         @EventHandler
         public void onPluginEnable(PluginEnableEvent event) {
-            if (event.getPlugin().getName().equalsIgnoreCase("ZelChat")) {
+            String name = event.getPlugin().getName();
+            if (name.equalsIgnoreCase("ZelChat") || name.equalsIgnoreCase("DiscordSRV")) {
                 plugin.scheduleChatAliasIntegrationRegistration();
             }
         }
 
         @EventHandler
         public void onPluginDisable(PluginDisableEvent event) {
-            if (event.getPlugin().getName().equalsIgnoreCase("ZelChat")) {
+            String name = event.getPlugin().getName();
+            if (name.equalsIgnoreCase("ZelChat")) {
+                plugin.closeDiscordShortcutGuard();
                 plugin.closeChatAliasIntegration();
+            } else if (name.equalsIgnoreCase("DiscordSRV")) {
+                plugin.closeDiscordShortcutGuard();
             }
         }
     }

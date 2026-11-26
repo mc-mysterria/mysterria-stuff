@@ -29,6 +29,12 @@ repositories {
         name = "pinodevRepo"
         url = "https://repo.pinodev.it/releases"
     }
+
+    maven {
+        name = "scarszRepo"
+        url = "https://nexus.scarsz.me/content/groups/public/"
+        content { includeGroup("com.discordsrv") }
+    }
 }
 
 tasks.build.dependsOn(shadowJar)
@@ -39,6 +45,7 @@ dependencies {
     compileOnly("de.skyslycer.hmcwraps:api:1.7.0")
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
     compileOnly("it.pino.zelchat:zelchat-api:2.0.0-pre-27")
+    compileOnly("com.discordsrv:discordsrv:1.30.5")
 }
 
 tasks {

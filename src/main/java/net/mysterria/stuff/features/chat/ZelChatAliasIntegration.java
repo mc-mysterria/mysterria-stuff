@@ -139,6 +139,11 @@ public final class ZelChatAliasIntegration implements ChatAliasIntegration, Chat
         cancelAndRun(chatMessage, sender -> dispatchProviderCommand(sender, parsed));
     }
 
+    @Override
+    public boolean isShortcut(String rawMessage) {
+        return rawMessage != null && parse(rawMessage.stripLeading()) != null;
+    }
+
     private ParsedShortcut parse(String content) {
         if (content.length() < 2 || content.charAt(0) != '!') {
             return null;
