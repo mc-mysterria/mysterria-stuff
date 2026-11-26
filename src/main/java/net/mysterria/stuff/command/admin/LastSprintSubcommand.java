@@ -76,10 +76,13 @@ public class LastSprintSubcommand extends Subcommand {
                 } else if (service.getRewardCount() == 0) {
                     Feedback.error(sender, "The kit is empty. Use /mystuff lastsprint setup first.");
                 } else {
-                    service.giveKit(target);
-                    Feedback.success(target, "You received the Last Sprint starter kit.");
-                    Feedback.success(sender, "Gave the Last Sprint kit to " + target.getName() + ".");
-                    PrettyLogger.info(sender.getName() + " gave the Last Sprint kit to " + target.getName());
+                    if (service.giveKit(target)) {
+                        Feedback.success(target, "You received the Last Sprint starter kit.");
+                        Feedback.success(sender, "Gave the Last Sprint kit to " + target.getName() + ".");
+                        PrettyLogger.info(sender.getName() + " gave the Last Sprint kit to " + target.getName());
+                    } else {
+                        Feedback.error(sender, "Could not record the gift for " + target.getName() + ", nothing was given. Check console.");
+                    }
                 }
             }
             default -> Feedback.error(sender, "Usage: /mystuff lastsprint <setup|give|reset|enable|disable|info>");

@@ -35,8 +35,7 @@ public class LastSprintJoinListener implements Listener {
             return;
         }
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (player.isOnline() && !service.hasReceivedKit(player.getUniqueId())) {
-                service.giveKit(player);
+            if (player.isOnline() && !service.hasReceivedKit(player.getUniqueId()) && service.giveKit(player)) {
                 welcome(player);
             }
         }, 20L);
