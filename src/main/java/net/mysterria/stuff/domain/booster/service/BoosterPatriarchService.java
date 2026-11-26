@@ -11,9 +11,11 @@ import net.mysterria.stuff.util.text.Feedback;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -24,6 +26,8 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public class BoosterPatriarchService {
@@ -38,11 +42,18 @@ public class BoosterPatriarchService {
     private final Gson gson = new Gson();
     private volatile Set<String> boosters;
     private final BukkitTask refreshTask;
+    // Sequence a suspended booster had, kept so restoring does not start them again at 9
+    private final File snapshotFile;
+    private final Map<UUID, Integer> pendingSequences = new ConcurrentHashMap<>();
+    // When a booster was first missing from the list, so one bad response cannot take their boon away
+    private final Map<UUID, Long> missingSince = new ConcurrentHashMap<>();
 
     public BoosterPatriarchService(Plugin plugin, CircleOfImaginationAPI coi, BoosterSettings settings) {
         this.plugin = plugin;
         this.coi = coi;
         this.settings = settings;
+        this.snapshotFile = new File(plugin.getDataFolder(), "patriarch_snapshots.yml");
+        loadSnapshots();
         long intervalTicks = settings.getUpdateIntervalSeconds() * 20L;
         this.refreshTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::fetchBoosters, 0L, intervalTicks);
     }
@@ -63,15 +74,31 @@ public class BoosterPatriarchService {
         if (boosters == null) {
             return;
         }
+        UUID playerId = player.getUniqueId();
+
         if (boosters.contains(player.getName().toLowerCase(Locale.ROOT))) {
+            // A valid list containing the player clears any earlier absence
+            missingSince.remove(playerId);
             if (holdsTooManyBoons(player)) {
-                revoke(player, "it can only be held alongside your main pathway");
+                suspend(player, "it can only be held alongside your main pathway");
             } else if (denyReason(player) == null) {
                 grant(player);
             }
-        } else if (hasPatriarch(player)) {
-            revoke(player, "your server boost has ended");
+            return;
         }
+
+        if (!hasPatriarch(player)) {
+            missingSince.remove(playerId);
+            return;
+        }
+
+        // Booster loss is only trusted once the player has been missing for a whole update interval
+        long missingFor = System.currentTimeMillis() - missingSince.computeIfAbsent(playerId, id -> System.currentTimeMillis());
+        if (missingFor < settings.getUpdateIntervalSeconds() * 1000L) {
+            return;
+        }
+        missingSince.remove(playerId);
+        suspend(player, "your server boost has ended");
     }
 
     public void forceGrant(Player player, CommandSender reporter) {
@@ -127,13 +154,57 @@ public class BoosterPatriarchService {
     }
 
     private boolean grant(Player player) {
-        boolean granted = coi.addPathwayOffline(player.getUniqueId(), PATRIARCH, 9);
-        if (granted) {
-            player.sendMessage(Component.text("Thank you for boosting! You have been granted the Patriarch boon.", NamedTextColor.GOLD));
-        } else {
+        // Restore the sequence they had when the boon was suspended instead of starting over at 9
+        Integer saved = pendingSequences.get(player.getUniqueId());
+        boolean granted = coi.addPathwayOffline(player.getUniqueId(), PATRIARCH, saved == null ? 9 : saved);
+        if (!granted) {
             PrettyLogger.warn("CircleOfImagination refused to grant Patriarch to " + player.getName());
+            return false;
         }
-        return granted;
+        if (saved != null) {
+            pendingSequences.remove(player.getUniqueId());
+            saveSnapshots();
+            player.sendMessage(Component.text("Your Patriarch boon is back at sequence " + saved + ".", NamedTextColor.GOLD));
+        } else {
+            player.sendMessage(Component.text("Thank you for boosting! You have been granted the Patriarch boon.", NamedTextColor.GOLD));
+        }
+        return true;
+    }
+
+    /** Removes the boon but remembers where they were, so restoring does not lose their progression. */
+    private boolean suspend(Player player, String reason) {
+        Integer sequence = patriarchSequence(player);
+        if (revoke(player, reason) && sequence != null) {
+            pendingSequences.put(player.getUniqueId(), sequence);
+            saveSnapshots();
+        }
+        return true;
+    }
+
+    private Integer patriarchSequence(Player player) {
+        Map<String, Integer> pathways = coi.getPathways(player.getName());
+        return pathways == null ? null : pathways.get(PATRIARCH);
+    }
+
+    private void loadSnapshots() {
+        YamlConfiguration data = YamlConfiguration.loadConfiguration(snapshotFile);
+        for (String key : data.getKeys(false)) {
+            try {
+                pendingSequences.put(UUID.fromString(key), data.getInt(key));
+            } catch (IllegalArgumentException e) {
+                PrettyLogger.warn("Skipping invalid UUID in patriarch_snapshots.yml: " + key);
+            }
+        }
+    }
+
+    private void saveSnapshots() {
+        YamlConfiguration data = new YamlConfiguration();
+        pendingSequences.forEach((id, sequence) -> data.set(id.toString(), sequence));
+        try {
+            data.save(snapshotFile);
+        } catch (IOException e) {
+            PrettyLogger.error("Could not save patriarch_snapshots.yml: " + e.getMessage());
+        }
     }
 
     private boolean revoke(Player player, String reason) {

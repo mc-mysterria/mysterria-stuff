@@ -31,10 +31,14 @@ public class LastSprintService {
         return giftedPlayers.contains(uuid);
     }
 
-    public void setReceivedKit(UUID uuid, boolean received) {
+    /**
+     * @return false when the change could not be written to disk
+     */
+    public boolean setReceivedKit(UUID uuid, boolean received) {
         if (received ? giftedPlayers.add(uuid) : giftedPlayers.remove(uuid)) {
-            save();
+            return save();
         }
+        return true;
     }
 
     public List<ItemStack> getRewards() {
@@ -52,9 +56,19 @@ public class LastSprintService {
         return rewards.size();
     }
 
-    public void giveKit(Player player) {
-        setReceivedKit(player.getUniqueId(), true);
+    /**
+     * Marks the kit as received before anything is handed over. If the flag cannot be saved the kit is
+     * withheld, otherwise the next join would be treated as unclaimed and the kit would be given twice.
+     *
+     * @return whether the kit was marked and handed over
+     */
+    public boolean giveKit(Player player) {
+        if (!setReceivedKit(player.getUniqueId(), true)) {
+            PrettyLogger.error("Could not save the Last Sprint gift flag for " + player.getName() + ", kit withheld");
+            return false;
+        }
         getRewards().forEach(reward -> ItemDelivery.give(player, reward));
+        return true;
     }
 
     private void load() {
@@ -71,7 +85,7 @@ public class LastSprintService {
         }
     }
 
-    private void save() {
+    private boolean save() {
         YamlConfiguration data = new YamlConfiguration();
         data.set("gifted-players", giftedPlayers.stream().map(UUID::toString).toList());
         data.set("reward-items", rewards.stream()
@@ -79,8 +93,10 @@ public class LastSprintService {
                 .toList());
         try {
             data.save(dataFile);
+            return true;
         } catch (IOException e) {
             PrettyLogger.error("Could not save lastsprint_data.yml: " + e.getMessage());
+            return false;
         }
     }
 }
