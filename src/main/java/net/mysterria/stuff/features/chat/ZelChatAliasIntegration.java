@@ -141,7 +141,7 @@ public final class ZelChatAliasIntegration implements ChatAliasIntegration, Chat
 
     @Override
     public boolean isShortcut(String rawMessage) {
-        return rawMessage != null && parse(rawMessage.stripLeading()) != null;
+        return rawMessage != null && parse(rawMessage) != null;
     }
 
     private ParsedShortcut parse(String content) {

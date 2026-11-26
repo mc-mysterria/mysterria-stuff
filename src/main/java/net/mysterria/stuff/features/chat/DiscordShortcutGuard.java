@@ -47,12 +47,18 @@ public final class DiscordShortcutGuard implements AutoCloseable {
         if (integration == null) {
             return;
         }
+        // Decide on exactly what the player typed, as the shortcut module does. Only when the chat event
+        // is unavailable fall back to the relayed text, which DiscordSRV may have taken the '!' off.
         String raw = rawMessage(event.getTriggeringBukkitEvent());
-        String relayed = event.getMessage();
-        // DiscordSRV may already have taken the leading '!' off the relayed text, so check it both ways.
-        if (integration.isShortcut(raw)
-                || integration.isShortcut(relayed)
-                || (relayed != null && !relayed.startsWith("!") && integration.isShortcut("!" + relayed.stripLeading()))) {
+        boolean shortcut;
+        if (raw != null) {
+            shortcut = integration.isShortcut(raw);
+        } else {
+            String relayed = event.getMessage();
+            shortcut = integration.isShortcut(relayed)
+                    || (relayed != null && !relayed.startsWith("!") && integration.isShortcut("!" + relayed));
+        }
+        if (shortcut) {
             event.setCancelled(true);
         }
     }
