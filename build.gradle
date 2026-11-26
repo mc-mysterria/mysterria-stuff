@@ -14,6 +14,10 @@ repositories {
     maven { url = 'https://repo.papermc.io/repository/maven-public/' }
     maven { url = 'https://nexus.mysterria.net/repository/plugin-public/' }
     maven { url = 'https://repo.pinodev.it/releases' }
+    maven {
+        url = 'https://nexus.scarsz.me/content/groups/public/'
+        content { includeGroup 'com.discordsrv' }
+    }
 }
 
 dependencies {
@@ -22,6 +26,7 @@ dependencies {
     compileOnly 'dev.ua.ikeepcalm:circle-of-imagination-api:1.4.0-SNAPSHOT'
     compileOnly 'de.skyslycer.hmcwraps:api:1.7.0'
     compileOnly 'it.pino.zelchat:zelchat-api:2.0.0-pre-27'
+    compileOnly 'com.discordsrv:discordsrv:1.30.5'
     compileOnly 'org.projectlombok:lombok:1.18.48'
     annotationProcessor 'org.projectlombok:lombok:1.18.48'
 }

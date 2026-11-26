@@ -111,6 +111,11 @@ public class ZelChatShortcutModule implements ChatShortcutModule, ChatModule {
         cancelAndRun(chatMessage, MessageState.CANCELLED, player -> dispatchProviderCommand(player, parsed));
     }
 
+    @Override
+    public boolean isShortcut(String rawMessage) {
+        return rawMessage != null && parse(rawMessage) != null;
+    }
+
     private ParsedShortcut parse(String content) {
         if (content.length() < 2 || content.charAt(0) != '!') {
             return null;
