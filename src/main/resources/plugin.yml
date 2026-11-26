@@ -4,7 +4,7 @@ main: net.mysterria.stuff.MysterriaStuff
 api-version: '26.3'
 authors: [ ikeepcalm ]
 description: Small Mysterria gameplay features and integrations
-softdepend: [ HMCWraps, CircleOfImagination, ZelChat ]
+softdepend: [ HMCWraps, CircleOfImagination, ZelChat, DiscordSRV ]
 
 commands:
   mysterriastuff:

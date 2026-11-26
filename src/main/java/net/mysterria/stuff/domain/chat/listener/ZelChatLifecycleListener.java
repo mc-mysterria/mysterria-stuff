@@ -14,15 +14,19 @@ public class ZelChatLifecycleListener implements Listener {
 
     @EventHandler
     public void onPluginEnable(PluginEnableEvent event) {
-        if (event.getPlugin().getName().equalsIgnoreCase("ZelChat")) {
+        String name = event.getPlugin().getName();
+        if (name.equalsIgnoreCase("ZelChat") || name.equalsIgnoreCase("DiscordSRV")) {
             service.scheduleRegistration();
         }
     }
 
     @EventHandler
     public void onPluginDisable(PluginDisableEvent event) {
-        if (event.getPlugin().getName().equalsIgnoreCase("ZelChat")) {
+        String name = event.getPlugin().getName();
+        if (name.equalsIgnoreCase("ZelChat")) {
             service.close();
+        } else if (name.equalsIgnoreCase("DiscordSRV")) {
+            service.closeDiscordGuard();
         }
     }
 }
